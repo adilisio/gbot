@@ -299,7 +299,7 @@ class BattleScene implements Scene {
         const s = this.shown[e.side]; s.sink = Math.min(1, this.et / 24); s.alpha = 1 - s.sink;
         return this.et >= 28;
       }
-      case 'switch': { const s = this.shown[e.side]; s.dx = Math.round(s.dx * 0.75); if (Math.abs(s.dx) <= 1) { s.dx = 0; return true; } return false; }
+      case 'switch': { const s = this.shown[e.side]; s.dx = Math.trunc(s.dx * 0.75); if (Math.abs(s.dx) <= 1) { s.dx = 0; return true; } return false; }
       case 'recall': { const s = this.shown[e.side]; s.alpha = Math.max(0, 1 - this.et / 12); return this.et >= 14; }
       case 'lantern': {
         const L = this.lantern!; L.t++;

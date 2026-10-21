@@ -95,6 +95,8 @@ window.addEventListener('keydown', () => audio.init(), { once: true });
   top: () => scenes.top()?.name || '?',
   stack: () => scenes.stack.map((s) => s.name || '?').join('>'),
   warp: (m: string, x: number, y: number) => { world.load(m, x, y, 0); },
+  aim: () => { const s: any = scenes.top(); if (s?.name !== 'battle' || s.mode !== 'fight') return -1; const ms: string[] = s.b.mon(0).moves; let bi = 0; ms.forEach((m, i) => { if ((MOVES[m]?.kind === 'hit' ? MOVES[m].power : 0) > (MOVES[ms[bi]]?.kind === 'hit' ? MOVES[ms[bi]].power : 0)) bi = i; }); s.fight.sel = bi; return bi; },
+  talk: (id: string) => { const e = world.def?.ents.find((e) => e.id === id); if (e?.talk) world.run(e.talk); return !!e?.talk; },
   flag: (k: string, v = 1) => setFlag(k, v),
   power: (lv = 45) => { for (const m of G.team) { m.lv = lv; m.hp = maxHp(m); } },
   addMon: (sp: string, lv: number) => { G.team.push(makeMon(sp, lv)); },
