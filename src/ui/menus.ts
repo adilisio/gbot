@@ -1,68 +1,267 @@
-import { Ctx, W, H } from '../engine/canvas';
+import { Ctx, W, H, makeCanvas } from '../engine/canvas';
 import { input } from '../engine/input';
 import { audio } from '../engine/audio';
 import { settings, saveSettings } from '../engine/settings';
 import { text, textC, textR, wrap } from '../engine/font';
-import { scenes, Scene, fadeOut, fadeIn } from '../game';
-import { G, maxHp, sp, Mon } from '../state';
+import { scenes, Scene, fadeOut, fadeIn, clock } from '../game';
+import { G, oilMax, addOil, bondOf, LANTERN_SLOTS } from '../state';
 import { ITEMS, ITEM_ORDER } from '../data/items';
-import { SPECIES, BEFRIENDABLE } from '../data/glimmers';
-import { TYPE_COLOR, TYPE_NAME } from '../data/types';
-import { panel, ListMenu, COL, bar, typeBadge } from './widgets';
-import { monRow, monDetail } from './monview';
-import { monSprite } from './art';
-import { TypeChartScene } from './typechart';
+import { WICKS, BOND_AT, ELEM_COLOR } from '../data/wicks';
+import { panel, ListMenu, COL, bar } from './widgets';
+import { monIcon, monSprite } from './art';
+import { GuideScene } from '../tactics/guide';
 import { SLOTS, readMeta, saveTo, loadFrom, fmtTime } from '../engine/save';
 import { applyScale } from '../screen';
 import type { Overworld } from '../overworld/overworld';
+import { walkable } from '../overworld/tiles';
+import { SHRINE_NAME } from '../data/shrines';
 
 const dim = (ctx: Ctx, a = 0.55) => { ctx.fillStyle = `rgba(5,7,15,${a})`; ctx.fillRect(0, 0, W, H); };
+
+/** Oil meter used on the HUD and in menus. */
+export function oilMeter(ctx: Ctx, x: number, y: number, w: number) {
+  const m = oilMax(); const low = G.oil <= Math.max(3, m / 5);
+  ctx.fillStyle = '#ffd06a'; ctx.fillRect(x, y + 1, 5, 7); ctx.fillStyle = '#3a2a1a'; ctx.fillRect(x + 1, y, 3, 1); ctx.fillRect(x + 1, y + 8, 3, 1);
+  ctx.fillStyle = '#fff4c0'; ctx.fillRect(x + 2, y + 3, 1, 3);
+  bar(ctx, x + 9, y + 2, w - 9, 4, G.oil / m, low ? '#ff5a4a' : '#ffb84a');
+  return low;
+}
+
+// ---------------- Minimap (cached per map) ----------------
+const mini: Record<string, HTMLCanvasElement> = {};
+function minimap(ow: Overworld): HTMLCanvasElement {
+  const key = ow.def.id + (ow.gateOpen ? 'g' : '');
+  if (mini[key]) return mini[key];
+  const [c, x] = makeCanvas(ow.w * 2, ow.h * 2);
+  for (let y = 0; y < ow.h; y++) for (let xx = 0; xx < ow.w; xx++) {
+    const t = ow.at(xx, y);
+    x.fillStyle = walkable(t, ow.gateOpen) ? (t === ',' || t === ';' ? '#2e4a34' : '#5a4a3a') : t === '~' ? '#0c1a34' : '#24202e';
+    x.fillRect(xx * 2, y * 2, 2, 2);
+  }
+  mini[key] = c; return c;
+}
+export function shrineInfo(ow: Overworld): { here: boolean; lit: boolean; x: number; y: number; dir: string; dist: number } | null {
+  const e = ow.def.ents.find((d) => d.kind === 'rest');
+  if (!e) return null;
+  const dx = e.x - ow.px, dy = e.y - ow.py;
+  const dir = (dy < -2 ? 'N' : dy > 2 ? 'S' : '') + (dx < -2 ? 'W' : dx > 2 ? 'E' : '');
+  return { here: true, lit: !!G.flags['shrine_' + ow.def.id], x: e.x, y: e.y, dir: dir || 'here', dist: Math.abs(dx) + Math.abs(dy) };
+}
 
 // ---------------- Pause ----------------
 export class PauseMenu implements Scene {
   transparent = true; name = 'pause';
   menu = new ListMenu([
-    { label: 'Team' }, { label: 'Bag' }, { label: 'Lantern Log' }, { label: 'Type Chart' },
+    { label: 'Lantern & Wicks' }, { label: 'Bag' }, { label: 'Field Guide' },
     { label: 'Save' }, { label: 'Load' }, { label: 'Settings' }, { label: 'Quit to Title' }, { label: 'Close' },
   ], W - 104, 16, 96, 13);
   constructor(private ow: Overworld) { audio.sfx('select'); }
   update() {
     const r = this.menu.update();
-    if (r === -2 || r === 8) { scenes.pop(this); input.consumeAll(); return; }
+    if (r === -2 || r === 7) { scenes.pop(this); input.consumeAll(); return; }
     switch (r) {
-      case 0: scenes.push(new TeamScene()); break;
+      case 0: scenes.push(new LanternScene(false)); break;
       case 1: scenes.push(new BagScene()); break;
-      case 2: scenes.push(new DexScene()); break;
-      case 3: scenes.push(new TypeChartScene(null)); break;
-      case 4: scenes.push(new SaveLoadScene('save', this.ow.def.name)); break;
-      case 5: scenes.push(new SaveLoadScene('load', this.ow.def.name)); break;
-      case 6: scenes.push(new SettingsScene()); break;
-      case 7: scenes.push(new ConfirmScene('Return to the title screen? Unsaved progress since your last autosave will be lost.', async (ok) => {
+      case 2: scenes.push(new GuideScene()); break;
+      case 3: scenes.push(new SaveLoadScene('save', this.ow.def.name)); break;
+      case 4: scenes.push(new SaveLoadScene('load', this.ow.def.name)); break;
+      case 5: scenes.push(new SettingsScene()); break;
+      case 6: scenes.push(new ConfirmScene('Return to the title screen? Unsaved progress since your last autosave will be lost.', async (ok) => {
         if (ok) { await fadeOut(); (window as any).__lfTitle(); await fadeIn(); }
       })); break;
     }
   }
   render(ctx: Ctx) {
     dim(ctx, 0.35);
-    panel(ctx, W - 110, 8, 104, 9 * 13 + 14);
+    panel(ctx, W - 110, 8, 104, 8 * 13 + 14);
     this.menu.render(ctx);
-    panel(ctx, 6, 8, 230, 58);
+    panel(ctx, 6, 8, 266, 70);
     text(ctx, `Chapter ${G.chapter}`, 14, 12, COL.hi);
-    textR(ctx, `${G.glints} glints`, 228, 12, COL.text);
-    text(ctx, 'Objective:', 14, 25, COL.dim);
-    wrap(G.obj, 210).slice(0, 2).forEach((l, i) => text(ctx, l, 14, 36 + i * 11, COL.text));
-    textR(ctx, 'Time ' + fmtTime(G.playtime), 228, 25, COL.dim);
-    G.team.forEach((m, i) => {
-      const x = 6 + i * 58;
-      panel(ctx, x, 70, 56, 30, COL.edgeDim);
-      ctx.drawImage(monSprite(m.sp), x + 2, 72, 26, 26);
-      text(ctx, 'Lv' + m.lv, x + 29, 74, COL.text);
-      bar(ctx, x + 29, 88, 23, 3, m.hp / maxHp(m));
-    });
-    text(ctx, 'WASD/arrows + Enter, or the mouse. Esc closes.', 8, H - 14, COL.dim);
+    textR(ctx, `${G.glints} glints`, 264, 12, COL.text);
+    text(ctx, 'Objective:', 14, 24, COL.dim);
+    wrap(G.obj, 246).slice(0, 2).forEach((l, i) => text(ctx, l, 14, 34 + i * 10, COL.text));
+    textR(ctx, 'Time ' + fmtTime(G.playtime), 264, 24, COL.dim);
+    oilMeter(ctx, 14, 58, 120); text(ctx, `Oil ${G.oil}/${oilMax()}`, 140, 57, COL.text);
+    // Lantern
+    panel(ctx, 6, 82, 266, 30, COL.edgeDim);
+    text(ctx, 'Lantern:', 12, 91, COL.dim);
+    G.lantern.forEach((id, i) => { const w = WICKS[id]; ctx.drawImage(monIcon(w.art), 58 + i * 70, 86); text(ctx, w.name, 78 + i * 70, 91, w.color); });
+    // Shrine + minimap
+    panel(ctx, 6, 116, 266, H - 122, COL.edgeDim);
+    const mm = minimap(this.ow);
+    const scale = mm.width > 120 || mm.height > 84 ? 1 : 1;
+    const mx = 12, my = 122;
+    const mw = Math.min(mm.width, 120), mh = Math.min(mm.height, H - 132);
+    ctx.drawImage(mm, 0, 0, mw, mh, mx, my, mw * scale, mh * scale);
+    const si = shrineInfo(this.ow);
+    if (si && si.x * 2 < mw && si.y * 2 < mh) {
+      const pulse = clock.t % 40 < 20;
+      ctx.fillStyle = si.lit ? (pulse ? '#ffd06a' : '#ff9a4a') : '#8a8aa0'; ctx.fillRect(mx + si.x * 2 - 1, my + si.y * 2 - 1, 4, 4);
+    }
+    if (this.ow.px * 2 < mw && this.ow.py * 2 < mh) { ctx.fillStyle = clock.t % 20 < 10 ? '#ffffff' : '#9fd8ff'; ctx.fillRect(mx + this.ow.px * 2, my + this.ow.py * 2, 2, 2); }
+    const tx = mx + mw + 8;
+    text(ctx, 'Nearest shrine', tx, 122, COL.hi);
+    const lines: string[] = [];
+    if (si) {
+      if (si.lit) lines.push(`${SHRINE_NAME[this.ow.def.id] || 'Shrine'} - lit (${si.dir === 'here' ? 'right here' : si.dir + ', ' + si.dist + ' steps'}).`);
+      else lines.push(`This area's shrine is cold (${si.dir === 'here' ? 'right here' : si.dir}, grey dot). Relight it to rest here.`);
+    } else lines.push('No shrine in this area.');
+    lines.push(`Last rested: ${G.rest.name || 'Courier Post shrine'}. You return there if your lantern runs dry.`);
+    let yy = 134;
+    for (const l of lines) for (const w of wrap(l, 262 - tx)) { text(ctx, w, tx, yy, COL.text); yy += 10; }
   }
 }
 
+
+// ---------------- Lantern & wick roster ----------------
+/** The one place to see and swap wicks. Swapping only works at a shrine (or in the first-time tutorial). */
+export class LanternScene implements Scene {
+  name = 'lantern'; transparent = true;
+  row = 0; col = 0; picked: { row: number; col: number } | null = null;
+  msg = '';
+  constructor(private canSwap: boolean, private done?: () => void, private tutorial = false) {
+    this.msg = canSwap ? 'Pick a wick, then the slot to swap it into. Esc when done.' : 'Swap wicks at any lit shrine (Rest and refill > Swap wicks).';
+  }
+  satchel() { return G.wicks.filter((id) => !G.lantern.includes(id)); }
+  cur(): string | null { return this.row === 0 ? G.lantern[this.col] || null : this.satchel()[this.col] || null; }
+  update() {
+    const sat = this.satchel();
+    const n = this.row === 0 ? LANTERN_SLOTS : Math.max(1, sat.length);
+    if (input.hit('left')) { this.col = (this.col + n - 1) % n; audio.sfx('blip'); }
+    if (input.hit('right')) { this.col = (this.col + 1) % n; audio.sfx('blip'); }
+    if (input.hit('up') || input.hit('down')) { this.row = 1 - this.row; this.col = Math.min(this.col, (this.row === 0 ? LANTERN_SLOTS : Math.max(1, sat.length)) - 1); audio.sfx('blip'); }
+    let clicked = false;
+    if (input.usingMouse) {
+      for (let i = 0; i < LANTERN_SLOTS; i++) if (input.inRect(8 + i * 124, 22, 120, 78)) { if (input.mouseMoved) { this.row = 0; this.col = i; } if (input.clicked) { this.row = 0; this.col = i; clicked = true; } }
+      sat.forEach((_, i) => { if (input.inRect(8 + i * 62, 116, 58, 34)) { if (input.mouseMoved) { this.row = 1; this.col = i; } if (input.clicked) { this.row = 1; this.col = i; clicked = true; } } });
+      if (input.clicked && input.inRect(W - 70, H - 20, 62, 14)) { input.clicked = false; this.close(); return; }
+    }
+    if (input.hit('confirm') || clicked) { input.clicked = false; this.act(); }
+    if (input.hit('back') || input.rclicked) {
+      input.rclicked = false;
+      if (this.picked) { this.picked = null; audio.sfx('back'); } else this.close();
+    }
+  }
+  act() {
+    if (!this.canSwap) { audio.sfx('deny'); this.msg = 'You can only swap wicks at a lit shrine. Look for the big glowing shrine-lantern.'; return; }
+    const here = { row: this.row, col: this.col };
+    if (this.row === 1 && !this.satchel()[this.col]) { audio.sfx('deny'); return; }
+    if (!this.picked) { if (this.row === 0 && !G.lantern[this.col] && !this.satchel().length) { audio.sfx('deny'); return; } this.picked = here; audio.sfx('select'); this.msg = 'Now pick where it goes.'; return; }
+    const a = this.picked, b = here; this.picked = null;
+    const sat = this.satchel();
+    const get = (p: { row: number; col: number }) => (p.row === 0 ? G.lantern[p.col] : sat[p.col]);
+    const A = get(a), B = get(b);
+    if (a.row === 0 && b.row === 0) { G.lantern[a.col] = B as string; G.lantern[b.col] = A as string; G.lantern = G.lantern.filter(Boolean); }
+    else if (a.row !== b.row) {
+      const slot = a.row === 0 ? a : b, bagId = a.row === 0 ? B : A;
+      if (!bagId) { audio.sfx('deny'); return; }
+      if (slot.col < G.lantern.length) G.lantern[slot.col] = bagId; else G.lantern.push(bagId);
+    }
+    audio.sfx('befriend'); this.msg = 'Swapped. The lantern\'s flame changes colour.';
+  }
+  close() {
+    if (!G.lantern.length) { audio.sfx('deny'); return; }
+    audio.sfx('back'); scenes.pop(this); input.consumeAll(); this.done?.();
+  }
+  card(ctx: Ctx, id: string | null, x: number, y: number, w: number, h: number, hot: boolean, picked: boolean, big: boolean) {
+    panel(ctx, x, y, w, h, picked ? '#9fd8ff' : hot ? COL.hi : COL.edgeDim, hot ? COL.sel : COL.bg);
+    if (!id) { textC(ctx, big ? 'empty slot' : '', x + w / 2, y + h / 2 - 5, COL.dim); return; }
+    const wk = WICKS[id];
+    if (big) {
+      ctx.drawImage(monSprite(wk.art), x + 2, y + 4, 34, 34);
+      text(ctx, wk.name, x + 38, y + 5, wk.color); text(ctx, wk.role, x + 38, y + 15, COL.dim);
+      const bl = bondOf(id); text(ctx, `bond ${bl}`, x + 38, y + 25, COL.hi);
+      wk.abilities.forEach((ab, i) => text(ctx, (i < bl ? '' : '- ') + ab.name, x + 6, y + 42 + i * 11, i < bl ? ELEM_COLOR[ab.elem] : COL.dim));
+    } else {
+      ctx.drawImage(monIcon(wk.art), x + 2, y + 6);
+      text(ctx, wk.name, x + 22, y + 6, wk.color); text(ctx, wk.role, x + 22, y + 17, COL.dim);
+    }
+  }
+  render(ctx: Ctx) {
+    dim(ctx, 0.85);
+    text(ctx, `Your lantern (${G.lantern.length}/${LANTERN_SLOTS})`, 10, 8, COL.hi);
+    textR(ctx, this.canSwap ? (this.tutorial ? 'Tutorial: swap freely' : 'At a shrine: swapping allowed') : 'View only', W - 10, 8, this.canSwap ? COL.good : COL.dim);
+    for (let i = 0; i < LANTERN_SLOTS; i++) this.card(ctx, G.lantern[i] || null, 8 + i * 124, 22, 120, 78, this.row === 0 && this.col === i, !!this.picked && this.picked.row === 0 && this.picked.col === i, true);
+    const sat = this.satchel();
+    text(ctx, `Satchel (${sat.length}) - riding along, not in the fight`, 10, 104, COL.dim);
+    if (!sat.length) text(ctx, 'Nobody in the satchel yet. More glimmers join through deliveries and choices.', 12, 124, COL.dim);
+    sat.forEach((id, i) => this.card(ctx, id, 8 + i * 62, 116, 58, 34, this.row === 1 && this.col === i, !!this.picked && this.picked.row === 1 && this.picked.col === i, false));
+    // detail
+    const id = this.cur();
+    panel(ctx, 4, 154, W - 8, 46, COL.edgeDim);
+    if (id) {
+      const wk = WICKS[id]; const pts = G.bond[id] || 0; const bl = bondOf(id);
+      wrap(wk.blurb + ' ' + wk.voice, W - 120).slice(0, 3).forEach((l, i) => text(ctx, l, 10, 158 + i * 10, COL.text));
+      text(ctx, 'Bond', W - 104, 158, COL.hi);
+      const next = BOND_AT[bl] ?? BOND_AT[2];
+      bar(ctx, W - 76, 161, 64, 4, bl >= 3 ? 1 : pts / next, '#ffd06a');
+      text(ctx, bl >= 3 ? 'max' : `${pts}/${next}`, W - 104, 170, COL.dim);
+      text(ctx, 'Grows from deliveries, fights and story with it lit.', 10, 189, COL.dim);
+    }
+    panel(ctx, 4, H - 16, W - 80, 14, COL.edgeDim, COL.bg); text(ctx, this.msg, 10, H - 14, this.canSwap ? COL.text : COL.hi);
+    panel(ctx, W - 70, H - 20, 62, 16, COL.edge); textC(ctx, 'Done [Esc]', W - 39, H - 17, COL.text);
+  }
+}
+
+// ---------------- Bag ----------------
+export class BagScene implements Scene {
+  name = 'bag'; transparent = true;
+  menu!: ListMenu; ids: string[] = []; msg = '';
+  constructor() { this.build(); }
+  build() {
+    this.ids = ITEM_ORDER.filter((id) => G.bag[id]);
+    const sel = this.menu?.sel || 0;
+    this.menu = new ListMenu([...this.ids.map((id) => ({ label: ITEMS[id].name, right: 'x' + G.bag[id] })), { label: 'Close' }], 12, 28, 180, 13, 1, 11);
+    this.menu.sel = Math.min(sel, this.ids.length);
+  }
+  update() {
+    const r = this.menu.update();
+    if (r === -2 || r === this.ids.length) { scenes.pop(this); input.consumeAll(); return; }
+    if (r >= 0) {
+      const it = ITEMS[this.ids[r]];
+      if (it.kind === 'oil') {
+        if (G.oil >= oilMax()) { audio.sfx('deny'); this.msg = 'Your lantern is already full.'; return; }
+        addOil(it.amount || 6); G.bag[it.id]--; if (!G.bag[it.id]) delete G.bag[it.id]; audio.sfx('heal'); this.msg = `You pour the ${it.name} in. Oil ${G.oil}/${oilMax()}.`; this.build();
+      } else { audio.sfx('deny'); this.msg = it.kind === 'upgrade' ? 'Already woven into your lantern.' : 'Something to deliver, not to use.'; }
+    }
+  }
+  render(ctx: Ctx) {
+    dim(ctx, 0.7);
+    panel(ctx, 6, 8, 194, 170); text(ctx, 'Bag', 14, 12, COL.hi);
+    if (!this.ids.length) text(ctx, 'Empty.', 20, 30, COL.dim);
+    this.menu.render(ctx);
+    panel(ctx, 206, 8, 172, 120, COL.edgeDim);
+    const id = this.ids[this.menu.sel];
+    if (id) { text(ctx, ITEMS[id].name, 214, 14, COL.hi); wrap(ITEMS[id].desc, 156).forEach((l, i) => text(ctx, l, 214, 28 + i * 10, COL.text)); }
+    oilMeter(ctx, 214, 112, 150);
+    if (this.msg) { panel(ctx, 6, 182, W - 12, 18, COL.edgeDim); text(ctx, this.msg, 14, 186, COL.text); }
+  }
+}
+
+// ---------------- Shrine ----------------
+export class ShrineScene implements Scene {
+  name = 'shrine'; transparent = true;
+  menu = new ListMenu([{ label: 'Swap wicks' }, { label: 'Save to a slot' }, { label: 'Leave' }], W / 2 - 70, 92, 140, 14);
+  constructor(private title: string, private mapName: string, private done: () => void) { audio.sfx('heal'); }
+  update() {
+    const r = this.menu.update();
+    if (r === -2 || r === 2) { scenes.pop(this); input.consumeAll(); this.done(); return; }
+    if (r === 0) scenes.push(new LanternScene(true));
+    if (r === 1) scenes.push(new SaveLoadScene('save', this.mapName));
+  }
+  render(ctx: Ctx) {
+    dim(ctx, 0.45);
+    panel(ctx, W / 2 - 100, 30, 200, 112, COL.hi);
+    textC(ctx, this.title, W / 2, 36, COL.hi);
+    textC(ctx, 'Rest and refill', W / 2, 50, COL.text);
+    oilMeter(ctx, W / 2 - 70, 64, 120); text(ctx, `${G.oil}/${oilMax()}`, W / 2 + 56, 63, COL.good);
+    textC(ctx, 'Oil refilled. Journey autosaved.', W / 2, 76, COL.dim);
+    this.menu.render(ctx);
+    panel(ctx, 4, 150, W - 8, 30, COL.edgeDim);
+    text(ctx, 'The shrine hums. If your lantern runs dry, this is where you\'ll wake.', 12, 154, COL.text);
+    text(ctx, `Lantern: ${G.lantern.map((id) => WICKS[id].name).join(', ')}${G.wicks.length > G.lantern.length ? `   Satchel: ${G.wicks.length - G.lantern.length}` : ''}`, 12, 165, COL.dim);
+  }
+}
 export class ConfirmScene implements Scene {
   name = 'confirm';
   transparent = true;
@@ -80,109 +279,7 @@ export class ConfirmScene implements Scene {
   }
 }
 
-// ---------------- Team (view + reorder) ----------------
-export class TeamScene implements Scene {
-  name = 'team';
-  transparent = true;
-  menu = new ListMenu(G.team.map((m) => ({ label: sp(m).name })), 8, 22, 160, 30, 1, 4);
-  pick = -1;
-  update() {
-    const r = this.menu.update();
-    if (r === -2) { if (this.pick >= 0) { this.pick = -1; return; } scenes.pop(this); input.consumeAll(); return; }
-    if (r >= 0) {
-      if (this.pick < 0) this.pick = r;
-      else { const t = G.team[r]; G.team[r] = G.team[this.pick]; G.team[this.pick] = t; this.pick = -1; audio.sfx('select'); }
-    }
-  }
-  render(ctx: Ctx) {
-    dim(ctx, 0.7);
-    panel(ctx, 4, 4, 170, 150);
-    text(ctx, this.pick >= 0 ? 'Swap with...?' : 'Team (select two to reorder)', 10, 8, COL.hi);
-    G.team.forEach((m, i) => monRow(ctx, m, 8, 22 + i * 30, 162, i === this.menu.sel || i === this.pick, i === 0));
-    if (G.team[this.menu.sel]) monDetail(ctx, G.team[this.menu.sel], 178, 4, 202, 150);
-    text(ctx, 'The first glimmer leads in battle.  Esc: back', 8, 160, COL.dim);
-  }
-}
 
-// ---------------- Bag ----------------
-export class BagScene implements Scene {
-  name = 'bag';
-  transparent = true;
-  ids: string[] = []; menu!: ListMenu; target: ListMenu | null = null;
-  constructor() { this.build(); }
-  build() {
-    this.ids = ITEM_ORDER.filter((id) => (G.bag[id] || 0) > 0);
-    const sel = this.menu ? this.menu.sel : 0;
-    this.menu = new ListMenu(this.ids.map((id) => ({ label: ITEMS[id].name, right: 'x' + G.bag[id] })), 10, 22, 180, 12, 1, 10);
-    this.menu.sel = Math.min(sel, Math.max(0, this.ids.length - 1));
-  }
-  update() {
-    if (this.target) {
-      const r = this.target.update();
-      if (r === -2) { this.target = null; return; }
-      if (r >= 0) {
-        const id = this.ids[this.menu.sel]; const it = ITEMS[id]; const m = G.team[r];
-        let ok = false;
-        if (it.kind === 'heal' && m.hp > 0 && m.hp < maxHp(m)) { m.hp = Math.min(maxHp(m), m.hp + (it.amount || 0)); ok = true; }
-        if (it.kind === 'revive' && m.hp <= 0) { m.hp = Math.floor(maxHp(m) / 2); ok = true; }
-        if (!ok) { audio.sfx('deny'); return; }
-        audio.sfx('heal'); G.bag[id]--; if (G.bag[id] <= 0) delete G.bag[id];
-        this.target = null; this.build();
-      }
-      return;
-    }
-    const r = this.menu.update();
-    if (r === -2) { scenes.pop(this); input.consumeAll(); return; }
-    if (r >= 0) {
-      const it = ITEMS[this.ids[r]];
-      if (it.kind === 'heal' || it.kind === 'revive') this.target = new ListMenu(G.team.map((m) => ({ label: sp(m).name })), 200, 22, 176, 30, 1, 4);
-      else audio.sfx('deny');
-    }
-  }
-  render(ctx: Ctx) {
-    dim(ctx, 0.7);
-    panel(ctx, 4, 4, 192, 150);
-    text(ctx, 'Bag', 10, 8, COL.hi); textR(ctx, `${G.glints} glints`, 190, 8, COL.text);
-    if (!this.ids.length) text(ctx, 'Empty.', 14, 24, COL.dim);
-    this.menu.render(ctx, !this.target);
-    const id = this.ids[this.menu.sel];
-    if (id) { panel(ctx, 4, 158, W - 8, 30, COL.edgeDim); wrap(ITEMS[id].desc + (ITEMS[id].kind === 'lantern' ? ' (Use in battle.)' : ''), W - 24).forEach((l, i) => text(ctx, l, 12, 163 + i * 11, COL.text)); }
-    if (this.target) {
-      panel(ctx, 198, 4, 182, 150);
-      G.team.forEach((m, i) => monRow(ctx, m, 200, 22 + i * 30, 176, i === this.target!.sel));
-      text(ctx, 'Use on whom?', 204, 8, COL.hi);
-    }
-  }
-}
-
-// ---------------- Lantern Log (dex) ----------------
-export class DexScene implements Scene {
-  name = 'dex';
-  transparent = true;
-  menu = new ListMenu(BEFRIENDABLE.map((s, i) => ({ label: G.seen.includes(s.id) ? s.name : '???', right: String(i + 1).padStart(2, '0') })), 8, 22, 140, 12, 1, 14);
-  update() { const r = this.menu.update(); if (r === -2) { scenes.pop(this); input.consumeAll(); } }
-  render(ctx: Ctx) {
-    dim(ctx, 0.75);
-    panel(ctx, 4, 4, 150, 208);
-    text(ctx, `Lantern Log  ${G.befriended.filter((id) => !SPECIES[id].boss).length}/${BEFRIENDABLE.length}`, 10, 8, COL.hi);
-    this.menu.render(ctx);
-    const s = BEFRIENDABLE[this.menu.sel];
-    panel(ctx, 158, 4, 222, 208);
-    const seen = G.seen.includes(s.id), friend = G.befriended.includes(s.id);
-    ctx.drawImage(monSprite(s.id, false, !seen), 168, 14, 80, 80);
-    if (seen) {
-      text(ctx, s.name, 256, 16, COL.hi); typeBadge(ctx, s.type, 256, 30, 34);
-      text(ctx, friend ? 'Befriended' : 'Seen', 256, 44, friend ? COL.good : COL.dim);
-      text(ctx, `HP ${s.hp} ATK ${s.atk}`, 256, 60, COL.text); text(ctx, `DEF ${s.def} SPD ${s.spd}`, 256, 71, COL.text);
-      wrap(s.desc, 200).forEach((l, i) => text(ctx, l, 168, 100 + i * 11, COL.text));
-      if (s.evo) text(ctx, `Grows at Lv ${s.evo.lv}${G.seen.includes(s.evo.to) ? ' into ' + SPECIES[s.evo.to].name : ''}.`, 168, 150, COL.dim);
-      const from = BEFRIENDABLE.find((x) => x.evo?.to === s.id);
-      if (from) text(ctx, `Grows from ${G.seen.includes(from.id) ? from.name : '???'}.`, 168, 162, COL.dim);
-    } else text(ctx, 'Not yet seen.', 256, 16, COL.dim);
-  }
-}
-
-// ---------------- Save / Load ----------------
 export class SaveLoadScene implements Scene {
   name = 'saveload';
   transparent = true;
@@ -222,12 +319,12 @@ export class SaveLoadScene implements Scene {
     this.menu.render(ctx);
     this.slots().forEach((s, i) => {
       const m = readMeta(s);
-      if (m) text(ctx, `Lv${m.lv} ${m.lead ? SPECIES[m.lead]?.name || '' : ''}   ${fmtTime(m.playtime)}   ${new Date(m.date).toLocaleString()}`, 56, 50 + i * 26 + 13, COL.dim);
+      if (m) text(ctx, `${m.wicks || 0} wicks   ${fmtTime(m.playtime)}   ${new Date(m.date).toLocaleString()}`, 56, 50 + i * 26 + 13, COL.dim);
     });
   }
 }
 
-// ---------------- Settings ----------------
+
 export class SettingsScene implements Scene {
   name = 'settings';
   transparent = true;
@@ -278,7 +375,7 @@ export class SettingsScene implements Scene {
   }
 }
 
-// ---------------- Shop ----------------
+
 export class ShopScene implements Scene {
   name = 'shop';
   transparent = true;
@@ -325,86 +422,3 @@ export class ShopScene implements Scene {
   }
 }
 
-// ---------------- Lantern Rest ----------------
-export class RestScene implements Scene {
-  name = 'rest';
-  transparent = true;
-  menu = new ListMenu([{ label: 'Rest (heal team)' }, { label: 'Roost (swap glimmers)' }, { label: 'Save journey' }, { label: 'Leave' }], W / 2 - 80, 70, 160, 14);
-  msg = 'The Lantern Rest hums. Its light feels like a hand on your shoulder.';
-  constructor(private mapName: string, private done: () => void) {}
-  update() {
-    const r = this.menu.update();
-    if (r === -2 || r === 3) { scenes.pop(this); input.consumeAll(); this.done(); return; }
-    if (r === 0) { for (const m of G.team) { m.hp = maxHp(m); m.status = null; } audio.sfx('heal'); this.msg = 'Your glimmers are fully rekindled. (Spot saved as your return point.)'; }
-    if (r === 1) scenes.push(new RoostScene());
-    if (r === 2) scenes.push(new SaveLoadScene('save', this.mapName));
-  }
-  render(ctx: Ctx) {
-    dim(ctx, 0.45);
-    panel(ctx, W / 2 - 90, 40, 180, 96);
-    textC(ctx, 'Lantern Rest', W / 2, 46, COL.hi);
-    this.menu.render(ctx);
-    panel(ctx, 4, 150, W - 8, 30, COL.edgeDim);
-    wrap(this.msg, W - 24).forEach((l, i) => text(ctx, l, 12, 155 + i * 11, COL.text));
-  }
-}
-
-// ---------------- Roost (team <-> storage) ----------------
-export class RoostScene implements Scene {
-  name = 'roost';
-  transparent = true;
-  side = 0; sel = [0, 0]; scroll = 0;
-  update() {
-    const lists: Mon[][] = [G.team, G.roost];
-    const L = lists[this.side];
-    if (input.hit('left') || input.hit('right')) { this.side = 1 - this.side; audio.sfx('blip'); this.clamp(); }
-    if (input.hit('up')) { this.sel[this.side] = Math.max(0, this.sel[this.side] - 1); audio.sfx('blip'); }
-    if (input.hit('down')) { this.sel[this.side] = Math.min(Math.max(0, L.length - 1), this.sel[this.side] + 1); audio.sfx('blip'); }
-    // Mouse
-    if (input.usingMouse) {
-      for (let i = 0; i < G.team.length; i++) if (input.inRect(8, 24 + i * 30, 166, 28)) { if (input.mouseMoved) { this.side = 0; this.sel[0] = i; } }
-      for (let i = 0; i < Math.min(9, G.roost.length - this.scroll); i++) if (input.inRect(200, 24 + i * 14, 176, 14)) { if (input.mouseMoved) { this.side = 1; this.sel[1] = i + this.scroll; } }
-      if (input.wheel) { this.sel[1] = Math.max(0, Math.min(G.roost.length - 1, this.sel[1] + input.wheel)); this.side = 1; }
-    }
-    if (this.sel[1] < this.scroll) this.scroll = this.sel[1];
-    if (this.sel[1] >= this.scroll + 9) this.scroll = this.sel[1] - 8;
-    if (input.hit('confirm') || (input.clicked && (input.mx < 380))) {
-      input.clicked = false;
-      if (this.side === 0) {
-        if (G.team.length <= 1) { audio.sfx('deny'); return; }
-        const m = G.team.splice(this.sel[0], 1)[0]; G.roost.push(m); audio.sfx('select');
-      } else {
-        if (!G.roost.length) return;
-        if (G.team.length >= 4) { audio.sfx('deny'); return; }
-        const m = G.roost.splice(this.sel[1], 1)[0]; m.hp = maxHp(m); m.status = null; G.team.push(m); audio.sfx('select');
-      }
-      this.clamp();
-    }
-    if (input.hit('back') || input.rclicked) { audio.sfx('back'); scenes.pop(this); input.consumeAll(); }
-  }
-  clamp() { this.sel[0] = Math.min(this.sel[0], Math.max(0, G.team.length - 1)); this.sel[1] = Math.min(this.sel[1], Math.max(0, G.roost.length - 1)); }
-  render(ctx: Ctx) {
-    dim(ctx, 0.8);
-    panel(ctx, 4, 4, 174, 150, this.side === 0 ? COL.hi : COL.edgeDim);
-    text(ctx, `Team ${G.team.length}/4`, 10, 9, COL.hi);
-    G.team.forEach((m, i) => monRow(ctx, m, 8, 24 + i * 30, 166, this.side === 0 && i === this.sel[0], false));
-    panel(ctx, 196, 4, 184, 150, this.side === 1 ? COL.hi : COL.edgeDim);
-    text(ctx, `Roost (${G.roost.length})`, 202, 9, COL.hi);
-    if (!G.roost.length) text(ctx, 'No glimmers resting here.', 204, 26, COL.dim);
-    for (let i = 0; i < Math.min(9, G.roost.length - this.scroll); i++) {
-      const m = G.roost[i + this.scroll]; const s = this.side === 1 && i + this.scroll === this.sel[1];
-      if (s) { ctx.fillStyle = COL.sel; ctx.fillRect(200, 24 + i * 14, 176, 13); }
-      ctx.fillStyle = TYPE_COLOR[SPECIES[m.sp].type]; ctx.fillRect(204, 29 + i * 14, 3, 3);
-      text(ctx, sp(m).name, 210, 25 + i * 14, s ? COL.hi : COL.text);
-      textR(ctx, 'Lv' + m.lv, 372, 25 + i * 14, COL.dim);
-    }
-    panel(ctx, 4, 158, W - 8, 54, COL.edgeDim);
-    const cur = this.side === 0 ? G.team[this.sel[0]] : G.roost[this.sel[1]];
-    if (cur) {
-      const s = sp(cur);
-      text(ctx, `${s.name}  Lv${cur.lv}  ${TYPE_NAME[s.type]}`, 12, 162, TYPE_COLOR[s.type]);
-      text(ctx, cur.moves.map((id) => id && (window as any).__lfMoveName(id)).join(', '), 12, 174, COL.text);
-    }
-    text(ctx, 'Enter/click: move between Team and Roost.  Left/Right: switch side.  Esc: done', 12, 196, COL.dim);
-  }
-}

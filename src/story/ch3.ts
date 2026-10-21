@@ -1,6 +1,6 @@
 import { registerMap } from '../overworld/mapdef';
 import { flag, G } from '../state';
-import { TrainerDef } from '../battle/engine';
+import type { FoeDef as TrainerDef } from '../overworld/script';
 import type { ScriptAPI } from '../overworld/script';
 
 const warden: TrainerDef = { id: 'warden', name: 'Belfry Warden', look: 'ghost', team: [['driftjelly', 18], ['belfrywarden', 21]], reward: 0, boss: true,
@@ -113,24 +113,29 @@ registerMap({
     { id: 'ghost3', x: 26, y: 18, kind: 'npc', look: 'ghost', dir: 0, glow: '#bff0ff', talk: async (s) => {
       await s.say('Drowned Grocer', 'Up there they think the dark is the end of the world. Down here we know it\'s only the bottom of the lake.');
     } },
-    { id: 'maren', x: 20, y: 7, kind: 'trainer', look: 'tide', dir: 0, sight: 2, talk: async (s) => {
-      if (flag('beat_maren')) { await s.say('Maren', 'The lake took my grandmother\'s house. I visit it sometimes. It\'s very clean now.'); return; }
-      await s.say('Maren', 'A surface-walker in the Steps? The Tidefolk test everyone who comes down.');
-      await s.battle({ id: 'maren', name: 'Maren', title: 'Tidefolk Diver', look: 'tide', team: [['driftjelly', 16], ['lampfish', 17]], reward: 340, lose: 'You pass. Barely. Mind the water.' });
+    { id: 'maren', x: 20, y: 7, kind: 'npc', look: 'tide', dir: 0, talk: async (s) => {
+      await s.say('Maren', 'A surface-walker in the Steps? Mind the water. Drowned shades swim - they rise right out of it.');
+      await s.say('Maren', 'Wet things will not burn, but they slow down. Tide first, then something heavy.');
     } },
-    { id: 'coll', x: 30, y: 17, kind: 'trainer', look: 'tide', dir: 2, sight: 4, talk: async (s) => {
-      if (flag('beat_coll')) { await s.say('Coll', 'The Hush Mother sings louder every night. Something\'s coming up.'); return; }
-      await s.say('Coll', 'Turn back, courier. Or don\'t, and lose.');
-      await s.battle({ id: 'coll', name: 'Coll', title: 'Tidefolk Diver', look: 'tide', team: [['hushling', 17], ['cobblecrab', 17], ['driftjelly', 18]], reward: 380, lose: 'Hm. The lake likes you. Strange.' });
+    { id: 'coll', x: 30, y: 17, kind: 'npc', look: 'tide', dir: 2, talk: async (s) => {
+      await s.say('Coll', 'The Hush Mother sings louder every night. Something\'s coming up.');
+      await s.say('Coll', 'When she sings, the drowned answer. Stand on the ripples where they rise and they cannot surface.');
     } },
-    { id: 'acolyte', x: 36, y: 12, kind: 'trainer', look: 'tide', dir: 1, sight: 2, talk: async (s) => {
-      if (flag('beat_acolyte')) { await s.say('Acolyte Wen', 'Shh. Listen. Can you hear her?'); return; }
+    { id: 'acolyte', x: 36, y: 12, kind: 'npc', look: 'tide', dir: 1, talk: async (s) => {
       await s.say('Acolyte Wen', 'Shhhh. You\'re very loud for someone so small.');
-      await s.battle({ id: 'acolyte', name: 'Wen', title: 'Hush Acolyte', look: 'tide', team: [['hushling', 18], ['hushling', 18]], reward: 360, lose: '...Fine. Be loud.' });
+      await s.say('Acolyte Wen', 'Bells in the dark hold the shades together. Ring them out first and the rest scatter.');
     } },
     { id: 'trader', x: 14, y: 16, kind: 'npc', look: 'tide', dir: 0, talk: async (s) => {
-      await s.say('Tidefolk Trader', 'Down here we trade in what floats. Lanterns float. Tonics float. Coins, sadly, sink - but I accept them.');
+      await s.say('Tidefolk Trader', 'Down here we trade in what floats. Oil floats. Coins, sadly, sink - but I accept them.');
       await s.shop(['tonic', 'bigtonic', 'salve', 'rekindle', 'lantern', 'silklantern']);
+    } },
+    { id: 'stepsDrowned', x: 24, y: 19, kind: 'shade', look: 'drowned', enc: 'steps1', dir: 2, sight: 2, show: () => !flag('beat_stepsDrowned'), talk: async (s) => {
+      await s.say(null, 'Drowned shades rise out of the flooded street, dripping and dark.');
+      await s.fight('steps1', { flagId: 'beat_stepsDrowned' });
+    } },
+    { id: 'stepsBells', x: 18, y: 8, kind: 'shade', look: 'bell', enc: 'steps2', dir: 0, sight: 2, show: () => !flag('beat_stepsBells'), talk: async (s) => {
+      await s.say(null, 'A drowned bell tolls once. Shades gather to the sound.');
+      await s.fight('steps2', { flagId: 'beat_stepsBells' });
     } },
     { id: 'sign3', x: 2, y: 16, kind: 'sign', talk: async (s) => { await s.say(null, 'HARBOUR GATE: both pressure plates must be weighted. (Leave the Steps and return to reset stuck crates.)'); } },
     { id: 'fenn3', x: 24, y: 17, kind: 'npc', look: 'guild', dir: 0, show: () => flag('c1') === 2, talk: async (s) => {

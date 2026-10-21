@@ -6,11 +6,14 @@ import { text, measure } from '../engine/font';
 import { scenes, Scene, clock, toasts } from '../game';
 import { G, flag } from '../state';
 import { getMap, MapDef, EntDef, Script } from './mapdef';
-import { TS, bakeMap, walkable, ENCOUNTER, VENT, TileMapView } from './tiles';
+import { TS, bakeMap, walkable, VENT, TileMapView } from './tiles';
 import { charSprite, objSprite, monIcon } from '../ui/art';
 import { panel, COL } from '../ui/widgets';
 import { makeAPI, ScriptAPI } from './script';
 import { saveTo } from '../engine/save';
+import { shadeSprite } from '../tactics/scene';
+import { ENEMIES } from '../tactics/rules';
+import { oilMeter, shrineInfo } from '../ui/menus';
 
 export interface Ent { def: EntDef; x: number; y: number; dir: number; fx: number; fy: number; t: number; hidden: boolean; bang: number; frame: number; }
 interface Crate { x: number; y: number; fx: number; fy: number; t: number; }
@@ -256,23 +259,11 @@ export class Overworld implements Scene, TileMapView {
     this.forced = false;
     // Trainers
     if (this.checkTrainers()) return;
-    // Encounters
-    if (ENCOUNTER.has(this.at(this.px, this.py)) && this.def.enc && this.def.enc.length) {
-      this.steps++;
-      if (this.steps > 3 && Math.random() < (this.def.rate ?? 0.1)) {
-        this.steps = 0; this.path = [];
-        const tot = this.def.enc.reduce((a, e) => a + e[3], 0);
-        let r = Math.random() * tot; let pick = this.def.enc[0];
-        for (const e of this.def.enc) { r -= e[3]; if (r <= 0) { pick = e; break; } }
-        const lv = pick[1] + Math.floor(Math.random() * (pick[2] - pick[1] + 1));
-        this.run(async (s) => { await s.wild(pick[0], lv); });
-      }
-    }
   }
 
   checkTrainers(): boolean {
     for (const e of this.ents) {
-      if (e.hidden || e.def.kind !== 'trainer' || !e.def.talk) continue;
+      if (e.hidden || (e.def.kind !== 'trainer' && e.def.kind !== 'shade') || !e.def.talk) continue;
       if (flag('beat_' + e.def.id)) continue;
       const [dx, dy] = DIRS[e.dir];
       const range = e.def.sight ?? 4;
@@ -294,7 +285,7 @@ export class Overworld implements Scene, TileMapView {
     const [dx, dy] = DIRS[this.dir];
     const e = this.entAt(this.px + dx, this.py + dy);
     if (e && e.def.talk) {
-      if (e.def.kind === 'npc' || e.def.kind === 'trainer') e.dir = [1, 0, 3, 2][this.dir];
+      if (e.def.kind === 'npc' || e.def.kind === 'trainer' || e.def.kind === 'shade') e.dir = [1, 0, 3, 2][this.dir];
       audio.sfx('blip');
       this.run(e.def.talk);
     }
@@ -320,6 +311,17 @@ export class Overworld implements Scene, TileMapView {
     const ww = Math.min(W - dx, layer.width - sx), hh = Math.min(H - dy, layer.height - sy);
     if (ww > 0 && hh > 0) ctx.drawImage(layer, sx, sy, ww, hh, dx, dy, ww, hh);
 
+    // Shade drifts show how far they can see, so you can sneak around them
+    for (const e of this.ents) {
+      if (e.hidden || e.def.kind !== 'shade' || flag('beat_' + e.def.id)) continue;
+      const [ddx, ddy] = DIRS[e.dir];
+      for (let i = 1; i <= (e.def.sight ?? 2); i++) {
+        const x = e.x + ddx * i, y = e.y + ddy * i;
+        if (!walkable(this.at(x, y), this.gateOpen)) break;
+        ctx.fillStyle = i === 1 ? 'rgba(140,60,200,0.32)' : 'rgba(140,60,200,0.18)';
+        ctx.fillRect(x * TS - this.camX, y * TS - this.camY, TS, TS);
+      }
+    }
     // Collect drawables (reuse array)
     const D = this.draw; D.length = 0;
     for (const e of this.ents) if (!e.hidden && e.def.kind !== 'trigger') D.push(e);
@@ -361,6 +363,9 @@ export class Overworld implements Scene, TileMapView {
       ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(X + 3, Y + 14, 10, 2);
       ctx.drawImage(charSprite(d.look || 'courier', e.dir, e.frame), X, Y - 2);
       if (d.glow) lights.push([X + 8, Y + 6, d.glow, 16]);
+    } else if (d.kind === 'shade') {
+      const bob = Math.round(Math.sin(clock.t / 14 + e.x) * 1.5);
+      ctx.drawImage(shadeSprite(d.look && ENEMIES[d.look] ? d.look : 'shade'), X - 2, Y - 6 + bob);
     } else if (d.mon) {
       const bob = Math.round(Math.sin(clock.t / 18 + e.x) * 2);
       ctx.drawImage(monIcon(d.mon), X - 2, Y - 6 + bob);
@@ -368,7 +373,12 @@ export class Overworld implements Scene, TileMapView {
     } else {
       const k = d.obj || (d.kind === 'rest' ? 'rest' : d.kind === 'sign' ? 'sign' : d.kind === 'item' ? 'parcel' : 'chest');
       ctx.drawImage(objSprite(k), X, Y);
-      if (d.kind === 'rest') lights.push([X + 8, Y + 7, '#ffcf7a', 30]);
+      if (d.kind === 'rest') {
+        const lit = !!flag('shrine_' + this.def.id);
+        if (lit) { const p = Math.round(Math.sin(clock.t / 20) * 2); lights.push([X + 8, Y + 6, '#ffcf7a', 40 + p]); lights.push([X + 8, Y + 6, '#fff0c0', 14]);
+          ctx.fillStyle = '#ffd58a'; ctx.fillRect(X + 7, Y - 9 + p, 2, 4); ctx.fillRect(X + 5, Y - 7 + p, 6, 1); }
+        else { ctx.fillStyle = 'rgba(10,10,22,0.65)'; ctx.fillRect(X + 4, Y + 3, 8, 10); lights.push([X + 8, Y + 7, '#6a6a9a', 12]); }
+      }
       else if (d.glow) lights.push([X + 8, Y + 8, d.glow, 18]);
       else if (d.kind === 'item' && Math.floor(clock.t / 30) % 2 === 0) { ctx.fillStyle = '#fff6d0'; ctx.fillRect(X + 12, Y + 4, 1, 1); }
     }
@@ -395,6 +405,28 @@ export class Overworld implements Scene, TileMapView {
   }
 
   drawHud(ctx: Ctx) {
+    // Oil meter (always visible) and the way to the nearest shrine
+    panel(ctx, 4, H - 18, 96, 14, COL.edgeDim);
+    const low = oilMeter(ctx, 8, H - 15, 88);
+    if (low && clock.t % 60 < 30) text(ctx, 'Low oil - find a shrine', 104, H - 16, COL.bad);
+    const si = shrineInfo(this);
+    if (si && si.lit) {
+      const sx = si.x * TS - this.camX + 8, sy = si.y * TS - this.camY + 8;
+      if (sx < 0 || sy < 0 || sx > W || sy > H) {
+        const cx = Math.max(10, Math.min(W - 10, sx)), cy = Math.max(30, Math.min(H - 28, sy));
+        ctx.fillStyle = '#ffd06a'; ctx.fillRect(cx - 2, cy - 2, 5, 5); ctx.fillStyle = '#fff4c0'; ctx.fillRect(cx - 1, cy - 1, 3, 3);
+        text(ctx, 'shrine', Math.max(2, Math.min(W - 34, cx - 14)), cy + (cy > H / 2 ? -12 : 4), '#ffd58a');
+      }
+    }
+    if (!this.busy && !this.moving) {
+      const [dx, dy] = DIRS[this.dir];
+      const e = this.entAt(this.px + dx, this.py + dy);
+      if (e && e.def.kind === 'rest') {
+        const lbl = flag('shrine_' + this.def.id) ? '[E] Rest and refill' : '[E] Relight shrine';
+        const w = measure(lbl) + 10; const X = e.x * TS - this.camX + 8 - w / 2, Y = e.y * TS - this.camY - 24;
+        panel(ctx, X, Y, w, 13, COL.hi); text(ctx, lbl, X + 5, Y + 1, COL.hi);
+      }
+    }
     if (this.bannerT > 0) {
       const a = Math.min(1, this.bannerT / 30, (180 - this.bannerT) / 20);
       ctx.globalAlpha = Math.max(0, a);

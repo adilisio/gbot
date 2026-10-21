@@ -1,6 +1,6 @@
 import { registerMap } from '../overworld/mapdef';
 import { flag, G } from '../state';
-import { TrainerDef } from '../battle/engine';
+import type { FoeDef as TrainerDef } from '../overworld/script';
 import type { ScriptAPI } from '../overworld/script';
 
 const COUNTER: Record<string, string> = { cindle: 'ripplet', ripplet: 'sproutwick', sproutwick: 'cindle' };
@@ -21,7 +21,7 @@ async function odile(s: ScriptAPI) {
     s.set('juniperHere');
     await s.say('Juniper', 'Fine? Odile, you gave the slowpoke a glimmer before ME?');
     await s.say('Odile', 'Juniper. You had your pick yesterday and you know it.');
-    await s.say('Juniper', 'Whatever. Wren - first route of the night goes to whoever wins. Lights up!');
+    await s.say('Juniper', 'Whatever. Wren - the Post lamps are guttering again. Dimming drill - whoever keeps their lantern lit longest gets first route. Lights up!');
     const won = await s.battle({ id: 'jun1', name: 'Juniper', title: 'Courier', look: 'juniper', team: [[juniperStarter(), 4]], reward: 60, noLoss: true,
       lose: 'Huh. Your glimmer actually likes you.', intro: 'Don\'t cry when you lose!' }, 'docks');
     if (won) await s.say('Juniper', 'Okay. Okay! Beginner\'s luck. I\'m taking the Kitefall run anyway.');
@@ -29,10 +29,10 @@ async function odile(s: ScriptAPI) {
     await s.say('Juniper', 'See you out there, slowpoke. Try not to get eaten by the dark.');
     s.set('juniperHere', 0); s.set('juniperGone');
     await s.say('Odile', 'Ignore her. Now: three deliveries. Lamp oil for Old Brannock down at the ferry dock. Moss seeds for Tamsin at the Reedmoss lamp hut, east over the bridge.');
-    await s.say('Odile', 'And this letter for Mrs. Ashgrove - she lives by the moss patch on the west side. Take some tonics and lanterns too. If a wild glimmer likes you, weaken it a little and offer a lantern.');
+    await s.say('Odile', 'And this letter for Mrs. Ashgrove - she lives by the moss patch on the west side. Take some oil flasks too. Every light your glimmers cast burns lantern oil, and the dark bites.');
     G.bag.oil = 1; G.bag.seeds = 1; s.set('letterAsh');
     await s.give('tonic', 3);
-    await s.say(null, 'Tip: press Esc for your menu, T for the type chart. Lantern Rests heal your team and save your journey.');
+    await s.say(null, 'Tip: shrines are the tall lanterns with a flame icon. Press E at one to relight it, then Rest and refill: oil goes back to full and the game saves. Esc opens your menu.');
     s.objective('Deliver lamp oil (ferry dock), seeds (Reedmoss) and a letter (west moss).');
     return;
   }
@@ -125,12 +125,14 @@ registerMap({
       await s.say('Fisher Hob', 'My granddad said the Long Swell came in one night and just... never went back out.');
     } },
     { id: 'kidT', x: 16, y: 10, kind: 'npc', look: 'kid', dir: 0, talk: async (s) => {
-      await s.say('Tully', 'Did you know every type is strong against two others? Ember burns Bloom AND Hush. My big sister told me. Press T to see it all!');
+      await s.say('Tully', 'Did you know shades can\'t swim? Push one into the water and - bloop! And wet stuff won\'t burn. My big sister told me. Press T in a fight to see it all!');
     } },
-    { id: 'dockhand', x: 33, y: 7, kind: 'trainer', look: 'dock', dir: 2, sight: 3, talk: async (s) => {
-      if (flag('beat_rook')) { await s.say('Rook', 'Good arm on you, courier. Your glimmer\'s got a good arm too.'); return; }
-      await s.say('Rook', 'Oi! New courier? Let\'s see what that glimmer of yours can do!');
-      await s.battle({ id: 'rook', name: 'Rook', title: 'Dockhand', look: 'dock', team: [['pebblit', 4], ['mothkin', 4]], reward: 90, lose: 'Ow. Fair enough.' });
+    { id: 'dockhand', x: 33, y: 7, kind: 'npc', look: 'dock', dir: 2, talk: async (s) => {
+      if (flag('beat_ferry')) { await s.say('Rook', 'Pier\'s quiet again. Good arm on you, courier. Your glimmers\' too.'); return; }
+      await s.say('Rook', 'Oi, courier! Snuffers have been crawling up the ferry pier, eating the dock lamps. Can\'t shift \'em with a broom.');
+      const c = await s.choose('Rook', 'Clear them out for me? I\'ll make it worth your while.', ['Lights up', 'Not now']);
+      if (c === 0) await s.fight('ferry', { flagId: 'beat_ferry' });
+      else await s.say('Rook', 'Suit yourself. They\'re not going anywhere. That\'s the problem.');
     } },
     { id: 'brannock', x: 22, y: 17, kind: 'npc', look: 'ferry', dir: 0, glow: '#ffd58a', talk: async (s) => {
       if (G.bag.oil) {
@@ -138,6 +140,8 @@ registerMap({
         await s.say('Brannock', 'Lamp oil! Odile remembered. Forty years I kept the Calloway light, and now I can barely keep my own boat lamp lit.');
         await s.say('Brannock', 'Here. Something for the road. And if you ever need to go DOWN, courier - really down - you find old Brannock.');
         await s.give('tonic', 2); await s.glints(60);
+        await s.say('Brannock', 'And take this lump with you. Found him asleep in my oil drum. Says he likes the weight of a good lantern.');
+        await s.joinWick('pebblit');
         return;
       }
       await s.say('Brannock', 'The lake\'s been singing lately. Low, under the waves. Haven\'t heard her sing like that since the Swell.');
@@ -225,15 +229,21 @@ registerMap({
     } },
     { id: 'restR', x: 30, y: 8, kind: 'rest', talk: async (s) => { await s.rest(); } },
     { id: 'sign1', x: 2, y: 8, kind: 'sign', talk: async (s) => { await s.say(null, 'REEDMOSS FLOATS. Wild glimmers nest in the glowmoss. Kite-gate to Kitefall: far east.'); } },
-    { id: 'dace', x: 17, y: 8, kind: 'trainer', look: 'courier', dir: 0, sight: 1, talk: async (s) => {
-      if (flag('beat_dace')) { await s.say('Dace', 'Thirty routes a night, and I lose to a rookie. Sigh.'); return; }
-      await s.say('Dace', 'Courier code: two couriers meet on a bridge, they trade lights!');
-      await s.battle({ id: 'dace', name: 'Dace', title: 'Courier', look: 'courier', team: [['mothkin', 4], ['pebblit', 5]], reward: 120, lose: 'Fast feet, faster glimmer.' });
+    { id: 'dace', x: 17, y: 8, kind: 'npc', look: 'courier', dir: 0, talk: async (s) => {
+      await s.say('Dace', 'Courier code: never cross a bridge in the dark. Shades nest under the planks.');
+      await s.say('Dace', "If one spots you - that purple stare - you\'re in for a scrap. Keep out of their sight lines and you can slip past.");
     } },
-    { id: 'ines', x: 39, y: 10, kind: 'trainer', look: 'guild', dir: 1, sight: 1, talk: async (s) => {
-      if (flag('beat_ines')) { await s.say('Ines', 'The Guild pays me to light lamps, not to lose. Don\'t tell anyone.'); return; }
-      await s.say('Ines', 'Lamplighter on patrol! Let me check your lantern... with violence!');
-      await s.battle({ id: 'ines', name: 'Ines', title: 'Lamplighter', look: 'guild', team: [['emberwisp', 5], ['fernling', 6]], reward: 140, lose: 'Your lantern is... very much in order.' });
+    { id: 'ines', x: 39, y: 10, kind: 'npc', look: 'guild', dir: 1, talk: async (s) => {
+      await s.say('Ines', 'Lamplighter on patrol. Your lantern looks thirsty, courier.');
+      await s.say('Ines', "Shrines refill a lantern for free. If you ever run dry out there, the last shrine you rested at is where you\'ll wake up.");
+    } },
+    { id: 'reedShade', x: 22, y: 9, kind: 'shade', look: 'snuffer', enc: 'reed1', dir: 2, sight: 2, show: () => !flag('beat_reedShade'), talk: async (s) => {
+      await s.say(null, 'A snuffer crawls out of the reeds, its hood swelling toward your lantern.');
+      await s.fight('reed1', { flagId: 'beat_reedShade' });
+    } },
+    { id: 'reedMoths', x: 14, y: 13, kind: 'shade', look: 'moth', enc: 'reed2', dir: 3, sight: 3, show: () => !flag('beat_reedMoths'), talk: async (s) => {
+      await s.say(null, 'Moths of the Dimming spiral out of the moss toward your light.');
+      await s.fight('reed2', { flagId: 'beat_reedMoths' });
     } },
     { id: 'sprig', x: 10, y: 15, kind: 'npc', mon: 'fernling', glow: '#7fe07a', show: () => !flag('sprigFound'), talk: async (s) => {
       if (!flag('sprigQuest')) { await s.say(null, 'A tiny fern-glimmer with a curl on top, shivering in the moss. It doesn\'t seem wild - it\'s wearing a ribbon.'); return; }

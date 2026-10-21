@@ -1,12 +1,13 @@
 import { W, H } from './canvas';
 
-export type Action = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'menu' | 'run' | 'debug' | 'chart';
+export type Action = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'menu' | 'run' | 'debug' | 'chart' | 'end' | 'cycle' | 'undo' | 'a1' | 'a2' | 'a3';
 
 const KEYMAP: Record<string, Action> = {
   ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
   KeyE: 'confirm', Space: 'confirm', Enter: 'confirm', NumpadEnter: 'confirm',
   Escape: 'back', Backspace: 'back', KeyQ: 'back',
   ShiftLeft: 'run', ShiftRight: 'run', F3: 'debug', KeyT: 'chart',
+  KeyF: 'end', Tab: 'cycle', KeyZ: 'undo', Digit1: 'a1', Digit2: 'a2', Digit3: 'a3',
 };
 
 class Input {

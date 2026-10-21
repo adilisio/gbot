@@ -1,6 +1,6 @@
 import { registerMap } from '../overworld/mapdef';
-import { flag, G, sp } from '../state';
-import { TrainerDef } from '../battle/engine';
+import { flag, G } from '../state';
+import type { FoeDef as TrainerDef } from '../overworld/script';
 import type { ScriptAPI } from '../overworld/script';
 import { juniperStarter } from './ch1';
 const FINAL: Record<string, string> = { cindle: 'pyrelynx', ripplet: 'floodmaw', sproutwick: 'lotuskeep' };
@@ -165,6 +165,11 @@ registerMap({
       await s.say('Fenn', 'The net-cutter! Of course it\'s you. Of course.');
       await s.battle({ id: 'fenn5', name: 'Fenn', title: 'Senior Collector', look: 'guild', team: [['cairnback', 28], ['candelabrat', 28], ['papermoth', 29]], reward: 900, lose: 'Fine. I never liked the nets either.' });
     } },
+    { id: 'junGate', x: 16, y: 16, w: 3, h: 1, kind: 'trigger', show: () => flag('c4') !== 1 && !flag('beat_jun4'), talk: async (s) => {
+      await s.say('Juniper', 'Wren! Not so fast.');
+      const e = s.ow.def?.ents.find((x: any) => x.id === 'junFoe'); if (e?.talk) await e.talk(s);
+      if (!flag('beat_jun4')) await s.movePlayer(0, 1);
+    } },
     { id: 'guard1', x: 16, y: 15, kind: 'trainer', look: 'guild', dir: 3, sight: 1, show: () => guildFavor() < 2 && !flag('fennAlly'), talk: async (s) => {
       if (flag('beat_guard1')) { await s.say('Crown Guard', 'Pass. Please. I have a family.'); return; }
       await s.say('Crown Guard', 'Halt! No one approaches the Heartwick tonight!');
@@ -172,6 +177,7 @@ registerMap({
     } },
     { id: 'guard2', x: 18, y: 14, kind: 'trainer', look: 'guild', dir: 2, sight: 1, show: () => guildFavor() < 2 && !flag('fennAlly'), talk: async (s) => {
       if (flag('beat_guard2')) { await s.say('Crown Guard', 'I didn\'t see anything.'); return; }
+      if (flag('beat_guard1')) { await s.say(null, 'The second guard looks at his partner, then at your lantern, and steps aside.'); s.set('beat_guard2'); return; }
       await s.say('Crown Guard', 'By order of the Provost!');
       await s.battle({ id: 'guard2', name: 'Crown Guard', look: 'guild', team: [['murmurowl', 28], ['stormkite', 28]], reward: 700, lose: 'The Provost won\'t like this.' });
     } },
@@ -194,4 +200,3 @@ registerMap({
     { id: 'finTrig', x: 12, y: 5, w: 11, h: 1, kind: 'trigger', show: () => !flag('finalDone') && !flag('finSeen'), talk: async (s) => { s.set('finSeen'); await finale(s); } },
   ],
 });
-void sp;

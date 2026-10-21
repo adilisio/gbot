@@ -11,7 +11,7 @@ for (const m of Object.values(allMaps())) {
   const w = raw[0].length;
   const at = (x: number, y: number) => (y < 0 || y >= raw.length || x < 0 || x >= w ? '' : raw[y][x]);
   const solidEnt = new Set<string>();
-  for (const e of m.ents) if (e.kind !== 'trigger') solidEnt.add(e.x + ',' + e.y);
+  for (const e of m.ents) if (e.kind !== 'trigger' && e.kind !== 'shade') solidEnt.add(e.x + ',' + e.y);
   const walk = (x: number, y: number) => walkable(at(x, y), true) && !solidEnt.has(x + ',' + y);
   for (const e of m.ents) {
     const t = at(e.x, e.y);

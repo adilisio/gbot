@@ -5,13 +5,12 @@ import { settings } from './engine/settings';
 import { startLoop, Stats, Recorder } from './engine/loop';
 import { text } from './engine/font';
 import { scenes, fader, clock, tickWaiters, fadeOut, fadeIn } from './game';
-import { G, newState, setState, makeMon, maxHp, setFlag } from './state';
+import { G, newState, setState, setFlag, addWick, refill } from './state';
 import { world } from './overworld/overworld';
 import { TitleScene } from './ui/scenes';
 import { SaveLoadScene, SettingsScene } from './ui/menus';
 import { anySave, loadFrom } from './engine/save';
 import { applyScale } from './screen';
-import { MOVES } from './data/moves';
 import { registerStory, newGameIntro } from './story';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
@@ -50,7 +49,6 @@ function enterLoaded() {
 (window as any).__lfTitle = toTitle;
 (window as any).__lfLoaded = async () => { await fadeOut(10); enterLoaded(); await fadeIn(10); };
 (window as any).__lfRebake = () => { if (world.def) world.rebake(); };
-(window as any).__lfMoveName = (id: string) => MOVES[id]?.name || id;
 
 toTitle();
 
@@ -89,18 +87,23 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pointerdown', () => audio.init(), { once: true });
 window.addEventListener('keydown', () => audio.init(), { once: true });
 
-// ---------- Debug / test harness hooks ----------
-(window as any).__lf = {
-  get G() { return G; }, world, scenes, input, stats, rec,
-  top: () => scenes.top()?.name || '?',
-  stack: () => scenes.stack.map((s) => s.name || '?').join('>'),
-  warp: (m: string, x: number, y: number) => { world.load(m, x, y, 0); },
-  aim: () => { const s: any = scenes.top(); if (s?.name !== 'battle' || s.mode !== 'fight') return -1; const ms: string[] = s.b.mon(0).moves; let bi = 0; ms.forEach((m, i) => { if ((MOVES[m]?.kind === 'hit' ? MOVES[m].power : 0) > (MOVES[ms[bi]]?.kind === 'hit' ? MOVES[ms[bi]].power : 0)) bi = i; }); s.fight.sel = bi; return bi; },
-  talk: (id: string) => { const e = world.def?.ents.find((e) => e.id === id); if (e?.talk) world.run(e.talk); return !!e?.talk; },
-  flag: (k: string, v = 1) => setFlag(k, v),
-  power: (lv = 45) => { for (const m of G.team) { m.lv = lv; m.hp = maxHp(m); } },
-  addMon: (sp: string, lv: number) => { G.team.push(makeMon(sp, lv)); },
-  press: (a: any) => input.inject(a),
-  hold: (a: any) => input.inject(a, true),
-  release: (a: any) => input.release(a),
-};
+import { autoTurn } from './tactics/autoplay';
+// ---------- Debug / test harness hooks (only with ?debug in the URL) ----------
+if (new URLSearchParams(location.search).has('debug')) {
+  (window as any).__lf = {
+    get G() { return G; }, world, scenes, input, stats, rec,
+    top: () => scenes.top()?.name || '?',
+    stack: () => scenes.stack.map((s) => s.name || '?').join('>'),
+    warp: (m: string, x: number, y: number) => { world.load(m, x, y, 0); },
+    flag: (k: string, v = 1) => setFlag(k, v),
+    addWick: (id: string) => addWick(id),
+    refill: () => refill(),
+    fight: (id: string) => world.run(async (s) => { await s.fight(id); }),
+    board: () => (scenes.top() as any)?.b || null,
+    autoTurn: () => autoTurn(scenes.top()),
+    talk: (id: string) => { const e = world.def?.ents.find((e) => e.id === id); if (e?.talk) world.run(e.talk); return !!e?.talk; },
+    press: (a: any) => input.inject(a),
+    hold: (a: any) => input.inject(a, true),
+    release: (a: any) => input.release(a),
+  };
+}

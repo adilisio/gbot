@@ -1,6 +1,6 @@
 import { registerMap } from '../overworld/mapdef';
 import { flag, G } from '../state';
-import { TrainerDef } from '../battle/engine';
+import type { FoeDef as TrainerDef } from '../overworld/script';
 import type { ScriptAPI } from '../overworld/script';
 import { juniperStarter } from './ch1';
 
@@ -86,7 +86,7 @@ registerMap({
       await s.battle({ id: 'pike', name: 'Pike', title: 'Guild Warden', look: 'guild', team: [['emberwisp', 10], ['pebblit', 11], ['mothkin', 10]], reward: 260, lose: 'Fine. Pass. This is going in my report.' });
     } },
     { id: 'pikeNice', x: 5, y: 13, kind: 'npc', look: 'guild', dir: 3, show: () => flag('c1') !== 1, talk: async (s) => {
-      await s.say('Guild Warden', 'Keep to the lit lanes, courier. Wild glimmers are bolder since the Dimming.');
+      await s.say('Guild Warden', 'Keep to the lit lanes, courier. Shades are bolder since the Dimming.');
     } },
     { id: 'moth', x: 13, y: 13, kind: 'npc', mon: 'mothkin', glow: '#c9d8ff', show: () => flag('c1') === 1 && !flag('mothGift'), talk: async (s) => {
       await s.say(null, 'A Mothkin flutters down into your lantern-light. There\'s a scorched gold thread still caught on one wing.');
@@ -94,9 +94,17 @@ registerMap({
       s.set('mothGift');
       await s.giveMon('mothkin', 10);
     } },
+    { id: 'kiteVents', x: 14, y: 9, kind: 'shade', look: 'shade', enc: 'kite1', dir: 0, sight: 2, show: () => !flag('beat_kiteVents'), talk: async (s) => {
+      await s.say(null, 'Shades pour out of a dark kite stall and turn toward your light.');
+      await s.fight('kite1', { flagId: 'beat_kiteVents' });
+    } },
+    { id: 'kiteStalls', x: 20, y: 16, kind: 'shade', look: 'snuffer', enc: 'kite2', dir: 1, sight: 2, show: () => !flag('beat_kiteStalls'), talk: async (s) => {
+      await s.say(null, 'A snuffer squats on the stall roofs, swallowing lamp after lamp.');
+      await s.fight('kite2', { flagId: 'beat_kiteStalls' });
+    } },
     { id: 'restK', x: 22, y: 12, kind: 'rest', talk: async (s) => { await s.rest(); } },
     { id: 'shopK', x: 8, y: 11, kind: 'npc', look: 'merchant', dir: 0, talk: async (s) => {
-      await s.say('Sanna', 'Silk lanterns, fresh off the loom! Glimmers can\'t resist them.');
+      await s.say('Sanna', 'Lamp oil, fresh off the barge! And silk wicks - thread one into your lantern and it holds more oil.');
       await s.shop(['tonic', 'bigtonic', 'salve', 'rekindle', 'lantern', 'silklantern']);
     } },
     { id: 'oona', x: 26, y: 11, kind: 'npc', look: 'kite', dir: 0, talk: async (s) => {
@@ -104,7 +112,7 @@ registerMap({
     } },
     { id: 'sel', x: 30, y: 15, kind: 'npc', look: 'elder', dir: 0, glow: '#b48cff', talk: async (s) => {
       await s.say('Madame Sel', 'I read the light, child. Yours is... complicated. Every choice you make is going to stick.');
-      await s.say('Madame Sel', 'A free tip from the cards: Hush stills Tide and Gale. Stone breaks Gale and Hush. Bring the right light to the right dark.');
+      await s.say('Madame Sel', 'A free tip from the cards: water drowns a flame, but wind feeds it. Push the dark into the lake and it will not climb out.');
     } },
     { id: 'ventKid', x: 34, y: 9, kind: 'npc', look: 'kid', dir: 0, talk: async (s) => {
       await s.say('Fen', 'The captain\'s deck is up through the vent yard. The vents shove you around! Arrows show which way. Walk on the plain stones to stop.');
@@ -132,15 +140,13 @@ registerMap({
     } },
     { id: 'vale', x: 36, y: 1, kind: 'npc', look: 'kite', dir: 0, glow: '#ff6a6a', talk: valeTalk },
     { id: 'signK', x: 2, y: 12, kind: 'sign', talk: async (s) => { await s.say(null, 'KITEFALL BAZAAR. Captain\'s deck: north-east vent yard. Ropewalk: south. Drowned Steps: south-east (CLOSED by order of the Guild).'); } },
-    { id: 'bram', x: 22, y: 23, kind: 'trainer', look: 'kite', dir: 2, sight: 4, talk: async (s) => {
-      if (flag('beat_bram')) { await s.say('Bram', 'Wind\'s changing, courier. Can you feel it?'); return; }
-      await s.say('Bram', 'Kite-hand Bram! Nobody walks the ropewalk without a fight!');
-      await s.battle({ id: 'bram', name: 'Bram', title: 'Kite-hand', look: 'kite', team: [['kiteling', 11], ['mothkin', 12]], reward: 220, lose: 'Snapped my string.' });
+    { id: 'bram', x: 22, y: 23, kind: 'npc', look: 'kite', dir: 2, talk: async (s) => {
+      await s.say('Bram', 'Kite-hand Bram! Nobody walks the ropewalk without hearing my advice.');
+      await s.say('Bram', 'Wind spreads fire, courier. Put a Gust behind a burning shade and the whole pack goes up.');
     } },
-    { id: 'wells', x: 35, y: 24, kind: 'trainer', look: 'courier', dir: 1, sight: 3, talk: async (s) => {
-      if (flag('beat_wells')) { await s.say('Wells', 'Lampfish lures look like lanterns. Don\'t follow them into the water. Learned that the hard way.'); return; }
-      await s.say('Wells', 'Night shift couriers have to stick together. By fighting. Obviously.');
-      await s.battle({ id: 'wells', name: 'Wells', title: 'Courier', look: 'courier', team: [['lampfish', 12], ['emberwisp', 12], ['cobblecrab', 13]], reward: 260, lose: 'Sticking together hurts.' });
+    { id: 'wells', x: 35, y: 24, kind: 'npc', look: 'courier', dir: 1, talk: async (s) => {
+      await s.say('Wells', 'Lampfish lures look like lanterns. Don\'t follow them into the water. Learned that the hard way.');
+      await s.say('Wells', 'If you\'re low on oil, rest at the bazaar shrine. Running dry out there just means a long walk back from it.');
     } },
     { id: 'chestK', x: 9, y: 25, kind: 'item', obj: 'chest', show: () => !flag('chestK'), talk: async (s) => { s.set('chestK'); await s.give('bigtonic', 2); await s.give('silklantern', 1); } },
     { id: 'chestK2', x: 18, y: 26, kind: 'item', obj: 'parcel', show: () => !flag('chestK2'), talk: async (s) => { s.set('chestK2'); await s.say(null, 'A lost parcel, addressed to nobody. Inside: glints, rattling.'); await s.glints(250); } },

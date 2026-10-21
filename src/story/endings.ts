@@ -1,11 +1,12 @@
 import { G, flag } from '../state';
-import { SPECIES } from '../data/glimmers';
+import { WICKS } from '../data/wicks';
 
 type Page = { title: string; body: string; mon?: string; tint: string };
 
 export function endingPages(id: string): Page[] {
-  const lead = G.team[0]?.sp || 'cindle';
-  const leadName = SPECIES[lead].name;
+  const leadId = G.lantern[0] || 'cindle';
+  const lead = WICKS[leadId].art;
+  const leadName = WICKS[leadId].name;
   const P: Page[] = [];
   const gold = '#ffd58a', blue = '#9fd8ff', green = '#9fffd0';
   const fenn = flag('c1') === 2

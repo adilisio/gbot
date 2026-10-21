@@ -45,6 +45,8 @@ async function marlow(s: ScriptAPI) {
     ]);
     await s.say('Marlow', 'Look out the window, kid. Look at that.');
     await s.say(null, 'Across the dark city, one by one, windows begin to glow.');
+    await s.say(null, 'Something crackles inside the radio set. A small, blue-white cat of pure static climbs out of the speaker and sits on your lantern.');
+    await s.joinWick('staticat');
   } else if (c === 1) {
     s.set('c4', 2);
     await s.radio([
@@ -109,7 +111,7 @@ registerMap({
   ents: [
     { id: 'rest4', x: 6, y: 20, kind: 'rest', talk: async (s) => { await s.rest(); } },
     { id: 'shop4', x: 9, y: 20, kind: 'npc', look: 'radio', dir: 0, talk: async (s) => {
-      await s.say('Tube Seller', 'Vacuum tubes, tonics, lanterns. Everything glows if you wire it right.');
+      await s.say('Tube Seller', 'Vacuum tubes, oil, silk wicks. Everything glows if you wire it right.');
       await s.shop(['bigtonic', 'elixir', 'salve', 'rekindle', 'silklantern']);
     } },
     { id: 'pedW', x: 3, y: 9, kind: 'obj', obj: 'pedestal', show: () => !flag('relayW'), talk: pedestal('relayW', 720, 'TIDE LINE', 'Tuned to the drowned choir.') },
@@ -122,10 +124,9 @@ registerMap({
       await s.say('Rigger Hale', 'Courier Wren! Captain Vale says you\'re crew now. Our channel\'s 1130 on the dial - the Sky Line relay. Don\'t tell the Guild.');
       if (!flag('riggerGift')) { s.set('riggerGift'); await s.give('elixir', 1); }
     } },
-    { id: 'riggerT', x: 24, y: 18, kind: 'trainer', look: 'kite', dir: 2, sight: 4, show: () => !flag('valeAlly'), talk: async (s) => {
-      if (flag('beat_rigger')) { await s.say('Rigger Hale', 'Fine. Our channel\'s 1130. Not that it\'ll help you. Captain still hasn\'t forgiven you.'); return; }
+    { id: 'riggerT', x: 24, y: 18, kind: 'npc', look: 'kite', dir: 2, show: () => !flag('valeAlly'), talk: async (s) => {
       await s.say('Rigger Hale', 'You\'re the courier who made a fool of the Captain! The Crews remember.');
-      await s.battle({ id: 'rigger', name: 'Hale', title: 'Kite Rigger', look: 'kite', team: [['kiteling', 22], ['stormkite', 23]], reward: 600, lose: 'Ugh. Fine! The Crews\' channel is 1130. Happy?' });
+      await s.say('Rigger Hale', 'Fine. Our channel\'s 1130. Not that it\'ll help you. Captain still hasn\'t forgiven you.');
     } },
     { id: 'listener', x: 33, y: 19, kind: 'npc', look: 'tide', dir: 2, talk: async (s) => {
       if (flag('c3') === 1) {
@@ -136,15 +137,21 @@ registerMap({
         await s.say('Tidefolk Listener', 'The drowned choir sings on 720. Not that you\'ll understand the song.');
       }
     } },
-    { id: 'pell', x: 30, y: 11, kind: 'trainer', look: 'radio', dir: 2, sight: 4, talk: async (s) => {
-      if (flag('beat_pell')) { await s.say('Pell', 'Staticats purr at 1450. All of them. It\'s eerie.'); return; }
+    { id: 'pell', x: 30, y: 11, kind: 'npc', look: 'radio', dir: 2, talk: async (s) => {
       await s.say('Pell', 'Radio engineer Pell! These towers are delicate. So is my temper.');
-      await s.battle({ id: 'pell', name: 'Pell', title: 'Engineer', look: 'radio', team: [['staticat', 22], ['staticat', 23]], reward: 520, lose: 'Signal lost.' });
+      await s.say('Pell', 'Staticats purr at 1450. All of them. It\'s eerie. And static jumps from one wet thing to the next - remember that.');
     } },
-    { id: 'ames', x: 12, y: 11, kind: 'trainer', look: 'courier', dir: 3, sight: 4, talk: async (s) => {
-      if (flag('beat_ames')) { await s.say('Ames', 'Up here you can see the whole city. Half of it\'s dark now.'); return; }
-      await s.say('Ames', 'Heights route\'s mine, rookie!');
-      await s.battle({ id: 'ames', name: 'Ames', title: 'Courier', look: 'courier', team: [['papermoth', 22], ['cobblecrab', 22], ['emberwisp', 23]], reward: 540, lose: 'Rookie my foot.' });
+    { id: 'ames', x: 12, y: 11, kind: 'npc', look: 'courier', dir: 3, talk: async (s) => {
+      await s.say('Ames', 'Heights route used to be mine, rookie. Up here you can see the whole city. Half of it\'s dark now.');
+      await s.say('Ames', 'Shades up here creep fast. Keep your back to a lit brazier - the dark will not touch the tiles around it.');
+    } },
+    { id: 'heightsShade', x: 24, y: 10, kind: 'shade', look: 'snuffer', enc: 'heights1', dir: 0, sight: 2, show: () => !flag('beat_heightsShade'), talk: async (s) => {
+      await s.say(null, 'Snuffers cling to the relay cables, drinking the signal lamps dry.');
+      await s.fight('heights1', { flagId: 'beat_heightsShade' });
+    } },
+    { id: 'heightsMoths', x: 22, y: 20, kind: 'shade', look: 'moth', enc: 'heights2', dir: 1, sight: 2, show: () => !flag('beat_heightsMoths'), talk: async (s) => {
+      await s.say(null, 'A cloud of Dimming moths drifts across the rooftop.');
+      await s.fight('heights2', { flagId: 'beat_heightsMoths' });
     } },
     { id: 'kidH', x: 20, y: 12, kind: 'npc', look: 'kid', dir: 0, talk: async (s) => {
       await s.say('Rosalind', 'My grandpa built the west tower. He said the drowned folk used to sing on it, back when Calloway still had a lighthouse. Seven-twenty, he said.');

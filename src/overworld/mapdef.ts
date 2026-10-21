@@ -3,7 +3,9 @@ import type { ScriptAPI } from './script';
 export type Script = (s: ScriptAPI) => Promise<void>;
 export interface EntDef {
   id: string; x: number; y: number;
-  kind: 'npc' | 'sign' | 'rest' | 'item' | 'trainer' | 'obj' | 'trigger';
+  kind: 'npc' | 'sign' | 'rest' | 'item' | 'trainer' | 'obj' | 'trigger' | 'shade';
+  /** For 'shade' drifts: which tactical encounter they start. */
+  enc?: string;
   look?: string; dir?: number; obj?: string; mon?: string;
   w?: number; h?: number;
   talk?: Script; show?: () => boolean; sight?: number; solid?: boolean; glow?: string; wander?: boolean;

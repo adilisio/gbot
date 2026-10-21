@@ -4,10 +4,9 @@ import { audio } from '../engine/audio';
 import { text, textC, textR, wrap, measure } from '../engine/font';
 import { scenes, Scene, clock } from '../game';
 import { G } from '../state';
-import { SPECIES, PASSIVES } from '../data/glimmers';
-import { TYPE_COLOR, TYPE_NAME } from '../data/types';
-import { panel, ListMenu, COL, typeBadge } from './widgets';
-import { monSprite, monGlow } from './art';
+import { WICKS, ELEM_COLOR } from '../data/wicks';
+import { panel, ListMenu, COL } from './widgets';
+import { monSprite, monIcon } from './art';
 import { endingPages } from '../story/endings';
 import { saveTo } from '../engine/save';
 import { settings } from '../engine/settings';
@@ -284,23 +283,24 @@ export class StarterScene implements Scene {
     ctx.fillStyle = 'rgba(5,7,15,0.4)'; ctx.fillRect(0, 0, W, H);
     textC(ctx, 'Three glimmers drift close to your lantern. One of them chooses you back.', W / 2, 10, COL.text);
     for (let i = 0; i < 3; i++) {
-      const id = this.ids[i], s = SPECIES[id];
+      const id = this.ids[i], s = WICKS[id];
       const x = 30 + i * 112, hot = i === this.sel;
       panel(ctx, x, 26, 100, 112, hot ? COL.hi : COL.edgeDim, hot ? '#1a1f3a' : COL.bg);
       ctx.globalCompositeOperation = 'lighter';
-      const g = monGlow(id); ctx.drawImage(g, x + 50 - g.width / 2, 66 - g.height / 2);
+      const g = glow(36, s.color, 0.9); ctx.drawImage(g, x + 50 - g.width / 2, 66 - g.height / 2);
       ctx.globalCompositeOperation = 'source-over';
       const bob = hot ? Math.round(Math.sin(this.t / 12) * 2) : 0;
       ctx.drawImage(monSprite(id), x + 10, 30 + bob, 80, 80);
       textC(ctx, s.name, x + 50, 112, hot ? COL.hi : COL.text);
-      typeBadge(ctx, s.type, x + 34, 125, 32);
+      textC(ctx, s.role, x + 50, 124, s.color);
     }
-    const s = SPECIES[this.ids[this.sel]];
-    panel(ctx, 20, 142, W - 40, 34, COL.edgeDim);
-    wrap(s.desc, W - 60).slice(0, 1).forEach((l) => text(ctx, l, 28, 146, COL.text));
-    text(ctx, `${PASSIVES[s.passive][0]}: ${PASSIVES[s.passive][1]}`, 28, 159, TYPE_COLOR[s.type]);
+    const s = WICKS[this.ids[this.sel]];
+    panel(ctx, 20, 140, W - 40, 36, COL.edgeDim);
+    wrap(s.blurb, W - 60).slice(0, 2).forEach((l, i) => text(ctx, l, 28, 143 + i * 10, COL.text));
+    const ab = s.abilities[0];
+    text(ctx, `${ab.name} (${ab.shape}): ${ab.desc}`.slice(0, 74), 28, 164, ELEM_COLOR[ab.elem]);
     if (this.confirm) { panel(ctx, W / 2 - 64, 176, 128, 30); this.confirm.render(ctx); }
-    else textC(ctx, `${TYPE_NAME[s.type]} type.  Left/Right to look, Enter or click to choose.`, W / 2, 190, COL.dim);
+    else textC(ctx, 'Left/Right to look, Enter or click to choose.', W / 2, 190, COL.dim);
   }
 }
 
@@ -338,7 +338,7 @@ export class EndingScene implements Scene {
     ctx.globalAlpha = a;
     textC(ctx, p.title, W / 2, 16, p.tint);
     if (p.mon) {
-      ctx.globalCompositeOperation = 'lighter'; const g = monGlow(p.mon); ctx.drawImage(g, W / 2 - g.width / 2, 62 - g.height / 2); ctx.globalCompositeOperation = 'source-over';
+      ctx.globalCompositeOperation = 'lighter'; const g = glow(36, p.tint, 0.9); ctx.drawImage(g, W / 2 - g.width / 2, 62 - g.height / 2); ctx.globalCompositeOperation = 'source-over';
       ctx.drawImage(monSprite(p.mon), W / 2 - 30, 32, 60, 60);
     }
     const y0 = p.mon ? 100 : 40;
@@ -351,7 +351,7 @@ export class EndingScene implements Scene {
     const lines = [
       'LANTERNFALL', '', 'A night-courier story', '', 'Design, code, art and music', 'generated procedurally, by hand, in TypeScript', '',
       'Canvas 2D  -  Web Audio  -  no engine', '', 'Font: glyphs rasterised from Pixelify Sans (SIL OFL)', '',
-      'Glimmers befriended: ' + G.befriended.filter((id) => !SPECIES[id].boss).length, 'Time: ' + Math.floor(G.playtime / 60) + ' minutes', '',
+      'Wicks who joined you: ' + G.wicks.length + ' of 10', 'Time: ' + Math.floor(G.playtime / 60) + ' minutes', '',
       'Thank you for carrying the light.', '', 'WKHV 1450, signing off.', '', '', 'THE END',
     ];
     const y0 = H - this.ct * 0.35;
