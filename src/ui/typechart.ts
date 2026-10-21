@@ -25,7 +25,7 @@ export class TypeChartScene implements Scene {
     textC(ctx, 'Defender', 190, 22, COL.dim);
     const ox = 112, oy = 46, c = 26;
     TYPES.forEach((t, i) => {
-      textC(ctx, TYPE_NAME[t], ox + i * c + c / 2, oy - 12, TYPE_COLOR[t]);
+      textC(ctx, TYPE_NAME[t].slice(0, 3).toUpperCase(), ox + i * c + c / 2, oy - 12, TYPE_COLOR[t]);
       text(ctx, TYPE_NAME[t], 70, oy + i * 16 + 3, TYPE_COLOR[t]);
     });
     for (let a = 0; a < 6; a++) for (let d = 0; d < 6; d++) {
@@ -45,7 +45,7 @@ export class TypeChartScene implements Scene {
       const weak = TYPES.filter((t) => BEATS[t].includes(sel)).map((t) => TYPE_NAME[t]).join(', ');
       text(ctx, 'Strong vs ' + BEATS[sel].map((t) => TYPE_NAME[t]).join(', ') + '.   Weak to ' + weak + '.', 30, y0 + 13, COL.dim);
     } else {
-      text(ctx, 'Each type is brilliant (x2) against two others, and resisted (1/2)', 30, y0, COL.text);
+      text(ctx, 'Each type is brilliant (x2) vs two others, and resisted (1/2)', 30, y0, COL.text);
       text(ctx, 'by two others and itself. Plain moves are always neutral.', 30, y0 + 12, COL.text);
     }
     text(ctx, 'Same-type moves deal +25%.  Hover a row for details.', 30, y0 + 28, COL.dim);

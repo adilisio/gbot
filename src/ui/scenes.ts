@@ -107,6 +107,7 @@ export class TitleScene implements Scene {
 
 // ---------------- Chapter card ----------------
 export class ChapterCard implements Scene {
+  name = 'chaptercard';
   t = 0;
   constructor(private n: number, private title: string, private sub: string, private done: () => void) { audio.sfx('chime'); }
   update() {
@@ -129,6 +130,7 @@ export class ChapterCard implements Scene {
 
 // ---------------- Radio interlude ----------------
 export class RadioScene implements Scene {
+  name = 'radio';
   i = 0; shown = 0; t = 0; noise: number[] = [];
   constructor(private title: string, private lines: [string, string][], private done: () => void) {
     audio.play('radio'); audio.sfx('static');
@@ -186,6 +188,7 @@ const DECOYS: Station[] = [
   { f: 1620, label: 'WSTR 1620: someone humming, very far away.' },
 ];
 export class TuneScene implements Scene {
+  name = 'tune';
   transparent = true;
   f = 900; hold = 0; msg = 'Sweep the dial. Hold steady on a clear signal to lock it.'; t = 0; dragging = false;
   stations: Station[];
@@ -256,6 +259,7 @@ export class TuneScene implements Scene {
 
 // ---------------- Starter choice ----------------
 export class StarterScene implements Scene {
+  name = 'starter';
   sel = 0; t = 0; confirm: ListMenu | null = null;
   ids = ['cindle', 'ripplet', 'sproutwick'];
   constructor(private done: (id: string) => void) {}
@@ -302,6 +306,7 @@ export class StarterScene implements Scene {
 
 // ---------------- Ending ----------------
 export class EndingScene implements Scene {
+  name = 'ending';
   pages: { title: string; body: string; mon?: string; tint: string }[];
   i = 0; t = 0; credits = false; ct = 0; lant = new Lanterns(30);
   constructor(private id: string, private done: () => void) {

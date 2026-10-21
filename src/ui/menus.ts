@@ -64,6 +64,7 @@ export class PauseMenu implements Scene {
 }
 
 export class ConfirmScene implements Scene {
+  name = 'confirm';
   transparent = true;
   menu = new ListMenu([{ label: 'Yes' }, { label: 'No' }], W / 2 - 40, 112, 80, 13);
   constructor(private q: string, private cb: (ok: boolean) => void) { this.menu.sel = 1; }
@@ -81,6 +82,7 @@ export class ConfirmScene implements Scene {
 
 // ---------------- Team (view + reorder) ----------------
 export class TeamScene implements Scene {
+  name = 'team';
   transparent = true;
   menu = new ListMenu(G.team.map((m) => ({ label: sp(m).name })), 8, 22, 160, 30, 1, 4);
   pick = -1;
@@ -104,6 +106,7 @@ export class TeamScene implements Scene {
 
 // ---------------- Bag ----------------
 export class BagScene implements Scene {
+  name = 'bag';
   transparent = true;
   ids: string[] = []; menu!: ListMenu; target: ListMenu | null = null;
   constructor() { this.build(); }
@@ -154,6 +157,7 @@ export class BagScene implements Scene {
 
 // ---------------- Lantern Log (dex) ----------------
 export class DexScene implements Scene {
+  name = 'dex';
   transparent = true;
   menu = new ListMenu(BEFRIENDABLE.map((s, i) => ({ label: G.seen.includes(s.id) ? s.name : '???', right: String(i + 1).padStart(2, '0') })), 8, 22, 140, 12, 1, 14);
   update() { const r = this.menu.update(); if (r === -2) { scenes.pop(this); input.consumeAll(); } }
@@ -180,6 +184,7 @@ export class DexScene implements Scene {
 
 // ---------------- Save / Load ----------------
 export class SaveLoadScene implements Scene {
+  name = 'saveload';
   transparent = true;
   menu: ListMenu;
   constructor(private mode: 'save' | 'load', private mapName: string, private onLoad?: () => void) {
@@ -224,6 +229,7 @@ export class SaveLoadScene implements Scene {
 
 // ---------------- Settings ----------------
 export class SettingsScene implements Scene {
+  name = 'settings';
   transparent = true;
   menu = new ListMenu([], 40, 40, W - 80, 14, 1, 10);
   constructor() { this.build(); }
@@ -274,6 +280,7 @@ export class SettingsScene implements Scene {
 
 // ---------------- Shop ----------------
 export class ShopScene implements Scene {
+  name = 'shop';
   transparent = true;
   menu: ListMenu; qty = 1; buying = -1;
   constructor(private items: string[], private done: () => void) {
@@ -320,6 +327,7 @@ export class ShopScene implements Scene {
 
 // ---------------- Lantern Rest ----------------
 export class RestScene implements Scene {
+  name = 'rest';
   transparent = true;
   menu = new ListMenu([{ label: 'Rest (heal team)' }, { label: 'Roost (swap glimmers)' }, { label: 'Save journey' }, { label: 'Leave' }], W / 2 - 80, 70, 160, 14);
   msg = 'The Lantern Rest hums. Its light feels like a hand on your shoulder.';
@@ -343,6 +351,7 @@ export class RestScene implements Scene {
 
 // ---------------- Roost (team <-> storage) ----------------
 export class RoostScene implements Scene {
+  name = 'roost';
   transparent = true;
   side = 0; sel = [0, 0]; scroll = 0;
   update() {

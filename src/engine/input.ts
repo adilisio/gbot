@@ -77,7 +77,7 @@ class Input {
   consume(a: Action) { this.pressed.delete(a); }
   consumeAll() { this.pressed.clear(); this.clicked = false; this.rclicked = false; this.anyKey = false; }
   /** For test harness: inject a key press. */
-  inject(a: Action, hold = false) { this.pressedQ.add(a); if (hold) this.down.add(a); }
+  inject(a: Action, hold = false) { this.pressedQ.add(a); this.anyKeyQ = true; if (hold) this.down.add(a); }
   release(a: Action) { this.down.delete(a); }
   inRect(x: number, y: number, w: number, h: number) { return this.mx >= x && this.my >= y && this.mx < x + w && this.my < y + h; }
 }
