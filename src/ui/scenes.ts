@@ -99,7 +99,7 @@ export class TitleScene implements Scene {
       panel(ctx, W / 2 - 56, 114, 112, 60);
       this.menu!.render(ctx);
     }
-    textC(ctx, 'WASD / arrows  -  E / Space: interact  -  Esc: menu  -  T: type chart  -  F3: FPS', W / 2, 192, COL.dim);
+    textC(ctx, 'WASD / arrows or mouse  -  E / Space: interact  -  Esc: menu  -  F3: FPS', W / 2, 192, COL.dim);
     textR(ctx, 'v1.0', W - 4, H - 12, '#4a4a6a');
   }
 }

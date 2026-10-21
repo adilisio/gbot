@@ -16,10 +16,10 @@ export const ENEMIES: Record<string, EnemyKind> = {
   moth: { id: 'moth', name: 'Gloom Moth', hp: 1, mv: 3, dmg: 1, pattern: [[1, 0]], fly: true, prefers: 'wick', desc: 'Flies over water, drawn to glimmers. Fragile.' },
   drowned: { id: 'drowned', name: 'Drowned', hp: 3, mv: 1, dmg: 2, pattern: [[1, 0], [2, 0]], swim: true, wet: true, desc: 'A sodden thing from Port Calloway. Always wet: fire is doused on it, Static jumps through it. Swims.' },
   snuffer: { id: 'snuffer', name: 'Snuffer', hp: 2, mv: 2, dmg: 1, pattern: [[1, 0]], prefers: 'brazier', desc: 'Hunts flames. Puts out lit braziers and goes for the courier carrying the parcel.' },
-  bell: { id: 'bell', name: 'Bellshade', hp: 4, mv: 1, dmg: 3, pattern: [[1, -1], [1, 0], [1, 1]], desc: 'A heavy, tolling shade. Sweeps three tiles in front of it.' },
-  gilt: { id: 'gilt', name: 'Binding Lantern', hp: 3, mv: 0, dmg: 0, pattern: [], immobile: true, spawner: 'shade', desc: 'A Guild lantern strung with gold thread. It pulls a shade out of the dark beside it every turn.' },
+  bell: { id: 'bell', name: 'Bellshade', hp: 3, mv: 1, dmg: 3, pattern: [[1, -1], [1, 0], [1, 1]], desc: 'A heavy, tolling shade. Sweeps three tiles in front of it.' },
+  gilt: { id: 'gilt', name: 'Binding Lantern', hp: 3, mv: 0, dmg: 0, pattern: [], immobile: true, spawner: 'shade', desc: 'A Guild lantern strung with gold thread. It pulls a shade out of the dark beside it every other turn.' },
   warden: { id: 'warden', name: 'Belfry Warden', hp: 9, mv: 1, dmg: 2, pattern: [[2, 0], [1, -1], [1, 1], [0, -2], [0, 2], [-1, -1], [-1, 1], [-2, 0]], boss: true, art: 'belfrywarden', desc: 'The drowned bell itself. Its toll rings in a diamond two tiles out.' },
-  aurelion: { id: 'aurelion', name: 'Aurelion', hp: 10, mv: 2, dmg: 3, pattern: [[1, 0], [2, 0], [1, -1], [1, 1]], boss: true, art: 'aurelion', desc: 'Calder\'s gilded guardian. Strikes in a heavy T. Can\'t be soaked.' },
+  aurelion: { id: 'aurelion', name: 'Aurelion', hp: 8, mv: 2, dmg: 3, pattern: [[1, 0], [2, 0], [1, -1], [1, 1]], boss: true, art: 'aurelion', desc: 'Calder\'s gilded guardian. Strikes in a heavy T. Can\'t be soaked.' },
   hushmother: { id: 'hushmother', name: 'The Hush Mother', hp: 12, mv: 0, dmg: 3, pattern: [[1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0], [7, 0], [8, 0]], immobile: true, boss: true, wet: true, spawner: 'drowned', art: 'hushmother', desc: 'The lake, risen. Her wave runs the full length of a row or column. Always wet.' },
   heartwick: { id: 'heartwick', name: 'The Heartwick', hp: 99, mv: 0, dmg: 2, pattern: [], immobile: true, invuln: true, boss: true, art: 'heartwick', desc: 'The great lantern, panicking. It can\'t be hurt - only calmed. Its flares land on marked tiles.' },
 };
@@ -381,7 +381,12 @@ export class Board {
     const o = this.def.objective;
     if (o.k === 'escort' && this.courier.x === this.exitX && this.courier.y === this.exitY) this.result = 'win';
     if (o.k === 'braziers' && this.braziers().every((i) => this.lit[i])) this.result = 'win';
-    if (o.k === 'rout' && this.foes().filter((f) => !ENEMIES[f.kind].invuln).length === 0) this.result = 'win';
+    if (o.k === 'rout') {
+      const live = this.foes().filter((f) => !ENEMIES[f.kind].invuln);
+      // In boss fights, the leaders (bosses and Binding lanterns) are the target: once they fall, stray shades scatter.
+      const leaders = this.def.boss ? this.units.filter((f) => f.side === 1 && (ENEMIES[f.kind].boss || ENEMIES[f.kind].spawner) && !ENEMIES[f.kind].invuln) : [];
+      if (live.length === 0 || (leaders.length && leaders.every((f) => f.dead))) { for (const f of live) f.dead = true; this.result = 'win'; }
+    }
   }
 
   // ---------------- enemy phase ----------------
@@ -516,7 +521,7 @@ export class Board {
     // Spawners (Binding lanterns, the Hush Mother) mark a tile beside them
     for (const e of this.foes()) {
       const k = ENEMIES[e.kind];
-      if (!k.spawner || (e.kind === 'hushmother' && this.turn % 2 === 1)) continue;
+      if (!k.spawner || ((e.kind === 'hushmother' || e.kind === 'gilt') && this.turn % 2 === 1)) continue;
       const free = DIRS.map(([dx, dy]) => [e.x + dx, e.y + dy]).filter(([x, y]) => this.in(x, y) && this.t(x, y) !== T_WALL && this.t(x, y) !== T_BRAZIER && this.t(x, y) !== T_WATER && !this.unitAt(x, y) && !this.ward[this.idx(x, y)] && !this.spawns.some((s) => s.x === x && s.y === y));
       if (free.length) { const [x, y] = free[(this.rand() * free.length) | 0]; this.spawns.push({ x, y, kind: k.spawner }); }
     }
@@ -562,9 +567,10 @@ export class Board {
   objectiveText(): string {
     const o = this.def.objective;
     if (o.k === 'survive') return `Hold out: ${Math.min(this.turn, o.turns)}/${o.turns} turns`;
-    if (o.k === 'escort') return 'Carry the parcel to the exit';
-    if (o.k === 'braziers') { const b = this.braziers(); return `Relight the braziers: ${b.filter((i) => this.lit[i]).length}/${b.length}`; }
-    return `Drive off the shades: ${this.foes().filter((f) => !ENEMIES[f.kind].invuln).length} left`;
+    if (o.k === 'escort') return 'Reach the exit door';
+    if (o.k === 'braziers') { const b = this.braziers(); return `Relight braziers: ${b.filter((i) => this.lit[i]).length}/${b.length}`; }
+    if (this.def.boss) { const l = this.foes().filter((f) => ENEMIES[f.kind].boss || ENEMIES[f.kind].spawner); if (l.length) return `Defeat the leaders: ${l.length} left`; }
+    return `Drive off shades: ${this.foes().filter((f) => !ENEMIES[f.kind].invuln).length} left`;
   }
 }
 

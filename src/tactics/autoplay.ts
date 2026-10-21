@@ -5,14 +5,30 @@ import { bondOf } from '../state';
 
 type Plan = { uid: number; mx: number; my: number; ab: number; dir: number; tx: number; ty: number; score: number };
 
+function pathDist(b: Board): number {
+  const c = b.courier; const goal = b.idx(b.exitX, b.exitY);
+  const seen = new Map<number, number>([[b.idx(c.x, c.y), 0]]); const q = [b.idx(c.x, c.y)];
+  for (let i = 0; i < q.length; i++) {
+    const cur = q[i]; if (cur === goal) return seen.get(cur)!;
+    const x = cur % b.w, y = Math.floor(cur / b.w);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy; if (!b.passable(c, nx, ny)) continue;
+      const ni = b.idx(nx, ny); if (seen.has(ni)) continue;
+      const o = b.unitAt(nx, ny); seen.set(ni, seen.get(cur)! + 1 + (o && o.side === 1 ? 2 : 0)); q.push(ni);
+    }
+  }
+  return 30;
+}
+
 function score(b: Board): number {
   if (b.result === 'win') return 10000 + b.oil;
   if (b.result === 'lose') return -10000;
   let s = b.oil * 4;
-  for (const f of b.foes()) if (!ENEMIES[f.kind].invuln) s -= f.hp * 3 + 2;
-  for (const i of b.braziers()) if (b.lit[i]) s += 12;
+  for (const f of b.foes()) { const k = ENEMIES[f.kind]; if (!k.invuln) s -= (f.hp * 3 + 2) * (b.def.boss && (k.boss || k.spawner) ? 3 : 1); }
+  for (const i of b.braziers()) if (b.lit[i]) s += 40;
+  if (b.def.objective.k === 'braziers') { let d = 99; for (const i of b.braziers()) if (!b.lit[i]) d = Math.min(d, Math.abs(b.courier.x - i % b.w) + Math.abs(b.courier.y - Math.floor(i / b.w))); if (d < 99) s -= d * 4; }
   const o = b.def.objective;
-  if (o.k === 'escort') s -= (Math.abs(b.courier.x - b.exitX) + Math.abs(b.courier.y - b.exitY)) * 6;
+  if (o.k === 'escort') s -= pathDist(b) * 6;
   if (o.k === 'survive') s += b.turn * 5;
   return s;
 }
@@ -75,4 +91,21 @@ export function autoTurn(scene: any): string {
   scene.select(null);
   if (b.result === 'none') scene.endTurn();
   return log.join(',');
+}
+
+/** Headless balance check: plays a whole encounter with the greedy bot. */
+export function simFight(def: any, wicks: string[], oil: number, oilMax: number, flasks: number, seed = 7): { result: string; turns: number; oil: number } {
+  const b = Board.create(def, wicks, oil, oilMax, flasks, seed);
+  for (let t = 0; t < 40 && b.result === 'none'; t++) {
+    for (const u0 of b.allies()) {
+      const u = b.units.find((v) => v.uid === u0.uid)!;
+      if (u.dead || b.result !== 'none') continue;
+      const p = bestFor(b, u); if (!p) continue;
+      if (p.mx !== u.x || p.my !== u.y) b.moveUnit(u, p.mx, p.my);
+      if (p.ab >= 0) b.cast(u, b.abilitiesOf(u)[p.ab], p.dir, p.tx, p.ty);
+    }
+    if (b.result !== 'none') break;
+    for (const st of b.enemySteps()) { st(); if (b.result !== 'none') break; }
+  }
+  return { result: b.result, turns: b.turn, oil: b.oil };
 }

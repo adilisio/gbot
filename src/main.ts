@@ -87,7 +87,8 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pointerdown', () => audio.init(), { once: true });
 window.addEventListener('keydown', () => audio.init(), { once: true });
 
-import { autoTurn } from './tactics/autoplay';
+import { autoTurn, simFight } from './tactics/autoplay';
+import { ENCOUNTERS } from './tactics/encounters';
 // ---------- Debug / test harness hooks (only with ?debug in the URL) ----------
 if (new URLSearchParams(location.search).has('debug')) {
   (window as any).__lf = {
@@ -97,10 +98,13 @@ if (new URLSearchParams(location.search).has('debug')) {
     warp: (m: string, x: number, y: number) => { world.load(m, x, y, 0); },
     flag: (k: string, v = 1) => setFlag(k, v),
     addWick: (id: string) => addWick(id),
+    join: (id: string) => world.run(async (s) => { await s.joinWick(id); }),
     refill: () => refill(),
     fight: (id: string) => world.run(async (s) => { await s.fight(id); }),
     board: () => (scenes.top() as any)?.b || null,
     autoTurn: () => autoTurn(scenes.top()),
+    sim: (id: string, wicks: string[], oil = 20, flasks = 2, seed = 7) => simFight(ENCOUNTERS[id], wicks, oil, oil, flasks, seed),
+    encounters: () => Object.keys(ENCOUNTERS),
     talk: (id: string) => { const e = world.def?.ents.find((e) => e.id === id); if (e?.talk) world.run(e.talk); return !!e?.talk; },
     press: (a: any) => input.inject(a),
     hold: (a: any) => input.inject(a, true),

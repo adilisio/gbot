@@ -533,7 +533,12 @@ export class TacticsScene implements Scene {
     // units
     const lights: [number, number, string, number][] = [];
     for (const u of b.units) {
-      if (u.dead) continue;
+      if (u.dead) {
+        // In a preview, show shades that would fall as faded ghosts so the X marks still read.
+        const r = this.pv ? this.b.units.find((v) => v.uid === u.uid) : null;
+        if (r && !r.dead && r.side === 1) { ctx.globalAlpha = 0.4; ctx.drawImage(shadeSprite(r.kind), ox + r.x * TS, oy + r.y * TS - 1); ctx.globalAlpha = 1; }
+        continue;
+      }
       const fx = u.ax + (u.x - u.ax) * u.at, fy = u.ay + (u.y - u.ay) * u.at;
       const X = Math.round(ox + fx * TS), Y = Math.round(oy + fy * TS);
       const bob = Math.round(Math.sin(clock.t / 16 + u.uid) * 1.5);

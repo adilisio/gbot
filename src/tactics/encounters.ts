@@ -15,7 +15,7 @@ const E: EncounterDef[] = [
     intro: 'Snuffers are crawling over Brannock\'s ferry lamps. Relight both before the dark takes the dock.', reward: { glints: 60, flask: 1 } },
   { id: 'reed1', title: 'The Rotten Bridge', theme: 'docks', objective: { k: 'escort' },
     map: ['~~~~~~~~', '~~..~~.E', 'C1.s..~.', '~2..~~..', '~~..s...', '~~~..~~.', '~~~~...~', '~~~~~~~~'],
-    creep: 1, spawnEvery: 2, spawnCount: 1, spawnKinds: ['shade'],
+    creep: 1, spawnEvery: 3, spawnCount: 1, spawnKinds: ['shade'],
     intro: 'Shades block the old reed bridge. Get your satchel to the far side. (Shades pushed into water sink.)', reward: { glints: 60 } },
   { id: 'reed2', title: 'Moths in the Glowmoss', theme: 'moss', objective: { k: 'survive', turns: 4 },
     map: ['........', '.m....m.', '...##...', '..1C2...', '...3....', '.....#..', '.m......', '........'],
@@ -66,9 +66,9 @@ const E: EncounterDef[] = [
     creep: 1, spawnEvery: 2, spawnCount: 1, spawnKinds: ['drowned'], spawnUntil: 6,
     intro: 'The bell wakes. Its keeper - a warden of drowned bronze - will not let the shard leave the Steps.', reward: { glints: 300 }, music: 'boss' },
   { id: 'ilse', title: 'Ilse\'s Lantern Line', theme: 'belfry', objective: { k: 'rout' }, boss: true,
-    map: ['........', '.g....g.', '...s....', '..1C2...', '...3....', '....s...', '...g....', '........'],
+    map: ['........', '.g....g.', '...s....', '..1C2...', '...3....', '....s...', '........', '........'],
     creep: 1, spawnEvery: 0, spawnCount: 0, spawnKinds: [],
-    intro: 'Warden-Captain Ilse hangs three Binding lanterns across the harbour stair. "The shard belongs to the city, courier."', reward: { glints: 300 }, music: 'boss' },
+    intro: 'Warden-Captain Ilse hangs two Binding lanterns across the harbour stair. "The shard belongs to the city, courier."', reward: { glints: 300 }, music: 'boss' },
 
   // ---------------- Chapter 4 ----------------
   { id: 'heights1', title: 'Relay Lamps', theme: 'heights', objective: { k: 'braziers' },
