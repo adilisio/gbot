@@ -375,7 +375,7 @@ export class Overworld implements Scene, TileMapView {
       ctx.drawImage(objSprite(k), X, Y);
       if (d.kind === 'rest') {
         const lit = !!flag('shrine_' + this.def.id);
-        if (lit) { const p = Math.round(Math.sin(clock.t / 20) * 2); lights.push([X + 8, Y + 6, '#ffcf7a', 40 + p]); lights.push([X + 8, Y + 6, '#fff0c0', 14]);
+        if (lit) { const p = Math.round(Math.sin(clock.t / 20) * 2); lights.push([X + 8, Y + 6, '#ffcf7a', 52 + p]); lights.push([X + 8, Y + 6, '#fff0c0', 18]);
           ctx.fillStyle = '#ffd58a'; ctx.fillRect(X + 7, Y - 9 + p, 2, 4); ctx.fillRect(X + 5, Y - 7 + p, 6, 1); }
         else { ctx.fillStyle = 'rgba(10,10,22,0.65)'; ctx.fillRect(X + 4, Y + 3, 8, 10); lights.push([X + 8, Y + 7, '#6a6a9a', 12]); }
       }
